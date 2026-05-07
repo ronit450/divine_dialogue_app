@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/widgets/religion_glyph.dart';
 
 class OnboardingIntroScreen extends StatefulWidget {
   const OnboardingIntroScreen({super.key});
@@ -184,6 +185,52 @@ class _SlideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (index == 1) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              children: const [
+                _ReligionGlyphCard(id: 'islam', name: 'Islam', color: AppColors.islamGreen),
+                _ReligionGlyphCard(id: 'hinduism', name: 'Hinduism', color: AppColors.hinduOrange),
+                _ReligionGlyphCard(id: 'sikhism', name: 'Sikhism', color: AppColors.sikhNavy),
+                _ReligionGlyphCard(id: 'christianity', name: 'Christianity', color: AppColors.christianPurple),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Column(
+              children: [
+                Text(
+                  slide.title,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cormorantGaramond(
+                    color: fg, fontSize: 36, fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w500, height: 1.08, letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  slide.body,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(color: muted, fontSize: 16, height: 1.55),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 20, 40, 20),
       child: Column(
@@ -223,6 +270,48 @@ class _SlideView extends StatelessWidget {
               fontSize: 16,
               height: 1.55,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReligionGlyphCard extends StatelessWidget {
+  const _ReligionGlyphCard({
+    required this.id,
+    required this.name,
+    required this.color,
+  });
+
+  final String id;
+  final String name;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.nightSurface : Colors.white;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: bg,
+        border: Border.all(color: line),
+        boxShadow: isDark
+            ? null
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ReligionGlyph(religionId: id, size: 28, color: color),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: GoogleFonts.inter(color: fg, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ],
       ),

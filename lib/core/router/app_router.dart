@@ -42,7 +42,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (!onboardingDone) {
-        const onboardingPaths = ['/onboarding/religion', '/onboarding/text', '/profile-setup'];
+        const onboardingPaths = ['/onboarding/religion', '/onboarding/text', '/profile-setup', '/sign-in'];
         final allowed = onboardingPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding/religion';
         return null;
