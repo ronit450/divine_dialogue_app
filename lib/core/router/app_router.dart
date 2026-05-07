@@ -7,6 +7,7 @@ import '../../features/onboarding/onboarding_intro_screen.dart';
 import '../../features/onboarding/onboarding_religion_screen.dart';
 import '../../features/onboarding/onboarding_text_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
+import '../../features/profile_setup/profile_setup_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/chat/chat_screen.dart';
@@ -41,7 +42,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (!onboardingDone) {
-        const onboardingPaths = ['/onboarding/religion', '/onboarding/text'];
+        const onboardingPaths = ['/onboarding/religion', '/onboarding/text', '/profile-setup'];
         final allowed = onboardingPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding/religion';
         return null;
@@ -72,6 +73,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sign-in',
         builder: (context, state) => const SignInScreen(),
+      ),
+      GoRoute(
+        path: '/profile-setup',
+        builder: (context, state) => const ProfileSetupScreen(),
       ),
       // History navigated to from profile tab — outside shell so it pushes on top
       GoRoute(

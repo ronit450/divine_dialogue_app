@@ -192,7 +192,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Future<void> _completeSignIn() async {
     await ref.read(religionProvider.notifier).completeSignIn();
-    if (mounted) context.go('/onboarding/religion');
+    if (mounted) context.go('/profile-setup');
   }
 
   Future<void> _handleEmailAuth() async {
@@ -224,7 +224,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Future<void> _handleGuest() async {
     setState(() => _loading = true);
-    await _completeSignIn();
+    await ref.read(religionProvider.notifier).completeSignIn();
+    if (mounted) context.go('/onboarding/religion');
     if (mounted) setState(() => _loading = false);
   }
 }
