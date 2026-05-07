@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,9 +19,11 @@ class OnboardingReligionScreen extends ConsumerWidget {
     final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
     final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
     final accent = selected?.accentColor ?? AppColors.islamGreen;
 
     return Scaffold(
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,7 +44,7 @@ class OnboardingReligionScreen extends ConsumerWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 28, 28, 12),
+              padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -54,7 +55,7 @@ class OnboardingReligionScreen extends ConsumerWidget {
                       fontWeight: FontWeight.w500, height: 1.05, letterSpacing: -0.4,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     'Pick a tradition — or open the dialogue across all of them.',
                     style: GoogleFonts.inter(color: muted, fontSize: 14, height: 1.5),
@@ -64,13 +65,40 @@ class OnboardingReligionScreen extends ConsumerWidget {
             ),
             Expanded(
               child: state.isLoaded
-                  ? _CardArea(
-                      religions: religions,
-                      selected: selected,
-                      isDark: isDark,
-                      fg: fg,
-                      muted: muted,
-                      onSelect: (r) => ref.read(religionProvider.notifier).selectReligion(r),
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      child: Column(
+                        children: [
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.88,
+                            ),
+                            itemCount: religions.length,
+                            itemBuilder: (context, i) => _ReligionCard(
+                              religion: religions[i],
+                              isSelected: selected?.id == religions[i].id,
+                              isDark: isDark,
+                              fg: fg,
+                              muted: muted,
+                              line: line,
+                              onTap: () => ref.read(religionProvider.notifier).selectReligion(religions[i]),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _AllPathsCard(
+                            religions: religions,
+                            isDark: isDark,
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                          ),
+                        ],
+                      ),
                     )
                   : const Center(child: CircularProgressIndicator()),
             ),
@@ -104,86 +132,14 @@ class OnboardingReligionScreen extends ConsumerWidget {
   }
 }
 
-class _CardArea extends StatelessWidget {
-  const _CardArea({
-    required this.religions,
-    required this.selected,
-    required this.isDark,
-    required this.fg,
-    required this.muted,
-    required this.onSelect,
-  });
-
-  final List<ReligionModel> religions;
-  final ReligionModel? selected;
-  final bool isDark;
-  final Color fg;
-  final Color muted;
-  final ValueChanged<ReligionModel> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: Stack(
-        children: [
-          if (selected != null)
-            Positioned.fill(
-              child: Align(
-                alignment: const Alignment(0, -0.2),
-                child: IgnorePointer(
-                  child: Container(
-                    width: 320,
-                    height: 320,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [selected!.accentColor.withValues(alpha: 0.2), Colors.transparent],
-                        stops: const [0, 0.65],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          Column(
-            children: [
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.82,
-                ),
-                itemCount: religions.length,
-                itemBuilder: (context, i) => _GlassCard(
-                  religion: religions[i],
-                  isSelected: selected?.id == religions[i].id,
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
-                  onTap: () => onSelect(religions[i]),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _AllPathsCard(religions: religions, isDark: isDark, fg: fg, muted: muted),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlassCard extends StatelessWidget {
-  const _GlassCard({
+class _ReligionCard extends StatelessWidget {
+  const _ReligionCard({
     required this.religion,
     required this.isSelected,
     required this.isDark,
     required this.fg,
     required this.muted,
+    required this.line,
     required this.onTap,
   });
 
@@ -192,101 +148,66 @@ class _GlassCard extends StatelessWidget {
   final bool isDark;
   final Color fg;
   final Color muted;
+  final Color line;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final accent = religion.accentColor;
+    final cardBg = isDark ? AppColors.nightSurface : Colors.white;
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
+          color: isSelected
+              ? (isDark ? accent.withValues(alpha: 0.12) : accent.withValues(alpha: 0.06))
+              : cardBg,
           border: Border.all(
-            color: isSelected
-                ? Colors.white
-                : (isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.7)),
+            color: isSelected ? accent : line,
             width: isSelected ? 1.5 : 1,
           ),
           boxShadow: isDark
-              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 6))]
-              : [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20, offset: const Offset(0, 6))],
+              ? null
+              : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 2))],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-              color: isDark
-                  ? (isSelected ? Colors.white.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.06))
-                  : (isSelected ? Colors.white.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.55)),
-              child: Stack(
-                children: [
-                  // Shimmer highlight
-                  Positioned(
-                    top: 0, left: 0, right: 0, height: 48,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.white.withValues(alpha: 0.3), Colors.transparent],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isSelected
-                              ? accent
-                              : (isDark ? Colors.white.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.7)),
-                        ),
-                        child: Center(
-                          child: ReligionGlyph(
-                            religionId: religion.id,
-                            size: 22,
-                            color: isSelected ? Colors.white : accent,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        religion.name,
-                        style: GoogleFonts.cormorantGaramond(
-                          color: fg, fontSize: 19, fontWeight: FontWeight.w600, letterSpacing: -0.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '"${religion.salutation}"',
-                        style: GoogleFonts.inter(color: muted, fontSize: 11, fontStyle: FontStyle.italic, height: 1.3),
-                      ),
-                    ],
-                  ),
-                  if (isSelected)
-                    Positioned(
-                      top: 0, right: 0,
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                        child: const Icon(Icons.check, color: Colors.white, size: 13),
-                      ),
-                    ),
-                ],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected
+                    ? accent.withValues(alpha: 0.12)
+                    : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF5F0EA)),
+              ),
+              child: Center(
+                child: ReligionGlyph(religionId: religion.id, size: 30, color: accent),
               ),
             ),
-          ),
+            const SizedBox(height: 14),
+            Text(
+              religion.name,
+              style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 18, fontWeight: FontWeight.w500, letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '"${religion.salutation}"',
+              style: GoogleFonts.inter(
+                color: muted, fontSize: 11, fontStyle: FontStyle.italic, height: 1.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
@@ -299,74 +220,76 @@ class _AllPathsCard extends StatelessWidget {
     required this.isDark,
     required this.fg,
     required this.muted,
+    required this.line,
   });
 
   final List<ReligionModel> religions;
   final bool isDark;
   final Color fg;
   final Color muted;
+  final Color line;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.55),
-            border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.7),
+    final cardBg = isDark ? AppColors.nightSurface : Colors.white;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: cardBg,
+        border: Border.all(color: line),
+        boxShadow: isDark
+            ? null
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 76,
+            height: 32,
+            child: Stack(
+              children: List.generate(religions.length, (i) => Positioned(
+                left: i * 14.0,
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: religions[i].accentColor,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Center(
+                    child: ReligionGlyph(religionId: religions[i].id, size: 14, color: Colors.white),
+                  ),
+                ),
+              )).reversed.toList(),
             ),
           ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 72,
-                height: 32,
-                child: Stack(
-                  children: List.generate(religions.length, (i) => Positioned(
-                    left: i * 13.0,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: religions[i].accentColor,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2),
-                      ),
-                      child: Center(
-                        child: ReligionGlyph(religionId: religions[i].id, size: 14, color: Colors.white),
-                      ),
-                    ),
-                  )).reversed.toList(),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'All paths',
+                  style: GoogleFonts.cormorantGaramond(
+                    color: fg, fontSize: 18, fontWeight: FontWeight.w500, letterSpacing: -0.2,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'All paths',
-                      style: GoogleFonts.cormorantGaramond(color: fg, fontSize: 19, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-                    ),
-                    Text(
-                      'Compare wisdom across every tradition.',
-                      style: GoogleFonts.inter(color: muted, fontSize: 12, height: 1.35),
-                    ),
-                  ],
+                Text(
+                  'Compare wisdom across every tradition.',
+                  style: GoogleFonts.inter(color: muted, fontSize: 12, height: 1.35),
                 ),
-              ),
-              Container(
-                width: 22, height: 22,
-                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: muted, width: 1.5)),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          Container(
+            width: 22, height: 22,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: muted, width: 1.5),
+            ),
+          ),
+        ],
       ),
     );
   }

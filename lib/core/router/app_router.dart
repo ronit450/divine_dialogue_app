@@ -18,33 +18,35 @@ final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final religionState = ref.watch(religionProvider);
+  // Only watch routing-relevant fields — prevents router rebuild on every card tap
+  final (:isLoaded, :signInDone, :onboardingDone) = ref.watch(
+    religionProvider.select(
+      (s) => (isLoaded: s.isLoaded, signInDone: s.signInDone, onboardingDone: s.onboardingDone),
+    ),
+  );
 
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/splash',
     redirect: (context, state) {
-      if (!religionState.isLoaded) return null;
+      if (!isLoaded) return null;
       final loc = state.matchedLocation;
       if (loc == '/splash') return null;
 
-      // Not signed in yet — allow only pre-auth paths
-      if (!religionState.signInDone) {
+      if (!signInDone) {
         const preAuthPaths = ['/onboarding', '/sign-in'];
         final allowed = preAuthPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding';
         return null;
       }
 
-      // Signed in but onboarding (religion/text selection) not done
-      if (!religionState.onboardingDone) {
+      if (!onboardingDone) {
         const onboardingPaths = ['/onboarding/religion', '/onboarding/text'];
         final allowed = onboardingPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding/religion';
         return null;
       }
 
-      // Fully set up — block going back to onboarding/sign-in
       const preAuthPaths = ['/onboarding', '/sign-in'];
       if (preAuthPaths.any((p) => loc.startsWith(p))) return '/home';
 

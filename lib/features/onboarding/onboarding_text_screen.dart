@@ -7,29 +7,56 @@ import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../shared/widgets/religion_glyph.dart';
 
-class OnboardingTextScreen extends ConsumerWidget {
+class OnboardingTextScreen extends ConsumerStatefulWidget {
   const OnboardingTextScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OnboardingTextScreen> createState() => _OnboardingTextScreenState();
+}
+
+class _OnboardingTextScreenState extends ConsumerState<OnboardingTextScreen> {
+  final Set<String> _selectedIds = {};
+  bool _loading = false;
+
+  void _toggle(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _continue(ReligionModel religion) async {
+    if (_selectedIds.isEmpty || _loading) return;
+    setState(() => _loading = true);
+
+    final notifier = ref.read(religionProvider.notifier);
+    final primary = religion.texts.firstWhere((t) => _selectedIds.contains(t.id));
+    await notifier.selectText(primary);
+    await notifier.completeOnboarding();
+
+    if (mounted) context.go('/sign-in');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(religionProvider);
     final religion = state.selectedReligion;
-    final selected = state.selectedText;
 
-    if (religion == null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => context.go('/onboarding/religion'),
-      );
-      return const SizedBox.shrink();
-    }
+    // Router handles redirect if religion is null — no postFrameCallback needed
+    if (religion == null) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
     final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
     final accent = religion.accentColor;
 
     return Scaffold(
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,8 +86,8 @@ class OnboardingTextScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      ReligionGlyph(religionId: religion.id, size: 20, color: accent),
-                      const SizedBox(width: 10),
+                      ReligionGlyph(religionId: religion.id, size: 18, color: accent),
+                      const SizedBox(width: 8),
                       Text(
                         religion.name.toUpperCase(),
                         style: GoogleFonts.jetBrainsMono(
@@ -77,7 +104,7 @@ class OnboardingTextScreen extends ConsumerWidget {
                       fontWeight: FontWeight.w500, height: 1.05, letterSpacing: -0.4,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     'Select one or more. Answers will cite the chapter and verse.',
                     style: GoogleFonts.inter(color: muted, fontSize: 14, height: 1.5),
@@ -92,19 +119,18 @@ class OnboardingTextScreen extends ConsumerWidget {
                 separatorBuilder: (context, i) => const SizedBox(height: 10),
                 itemBuilder: (context, i) {
                   final text = religion.texts[i];
-                  final isPrimary = i == 0;
-                  final isSel = selected?.id == text.id;
+                  final isSel = _selectedIds.contains(text.id);
                   return _BookCard(
                     text: text,
                     accent: accent,
                     soft: religion.accentSoft,
-                    isPrimary: isPrimary,
+                    isPrimary: i == 0,
                     isSelected: isSel,
                     isDark: isDark,
                     fg: fg,
                     muted: muted,
                     line: line,
-                    onTap: () => ref.read(religionProvider.notifier).selectText(text),
+                    onTap: () => _toggle(text.id),
                   );
                 },
               ),
@@ -115,25 +141,25 @@ class OnboardingTextScreen extends ConsumerWidget {
                 width: double.infinity,
                 height: 56,
                 child: FilledButton(
-                  onPressed: selected == null
-                      ? null
-                      : () async {
-                          await ref.read(religionProvider.notifier).completeOnboarding();
-                          if (context.mounted) context.go('/sign-in');
-                        },
+                  onPressed: (_selectedIds.isEmpty || _loading) ? null : () => _continue(religion),
                   style: FilledButton.styleFrom(
-                    backgroundColor: selected == null
+                    backgroundColor: _selectedIds.isEmpty
                         ? (isDark ? AppColors.nightSurface : AppColors.boneSurface)
                         : accent,
                     shape: const StadiumBorder(),
                   ),
-                  child: Text(
-                    'Begin dialogue',
-                    style: GoogleFonts.inter(
-                      fontSize: 16, fontWeight: FontWeight.w600,
-                      color: selected == null ? muted : Colors.white,
-                    ),
-                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          'Begin dialogue',
+                          style: GoogleFonts.inter(
+                            fontSize: 16, fontWeight: FontWeight.w600,
+                            color: _selectedIds.isEmpty ? muted : Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -171,9 +197,8 @@ class _BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isPrimary
-        ? (isDark ? accent.withValues(alpha: 0.12) : soft)
-        : Colors.transparent;
+    final cardBg = isDark ? AppColors.nightSurface : Colors.white;
+    final selBg = isDark ? accent.withValues(alpha: 0.12) : soft;
 
     return GestureDetector(
       onTap: onTap,
@@ -182,17 +207,15 @@ class _BookCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isPrimary ? accent : line),
-          color: bgColor,
+          border: Border.all(color: isSelected ? accent : line, width: isSelected ? 1.5 : 1),
+          color: isSelected ? selBg : cardBg,
         ),
         child: Row(
           children: [
-            // Book spine shape
             Stack(
               children: [
                 Container(
-                  width: 44,
-                  height: 56,
+                  width: 44, height: 56,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(4),
                     color: isPrimary
@@ -242,10 +265,7 @@ class _BookCard extends StatelessWidget {
               width: 22, height: 22,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isSelected ? accent : (isPrimary ? accent : line),
-                  width: 1.5,
-                ),
+                border: Border.all(color: isSelected ? accent : line, width: 1.5),
                 color: isSelected ? accent : Colors.transparent,
               ),
               child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 13) : null,

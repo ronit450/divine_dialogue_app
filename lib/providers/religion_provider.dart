@@ -8,6 +8,7 @@ class ReligionState {
     this.religions = const [],
     this.selectedReligion,
     this.selectedText,
+    this.selectedTexts = const [],
     this.isLoaded = false,
     this.signInDone = false,
     this.onboardingDone = false,
@@ -16,6 +17,7 @@ class ReligionState {
   final List<ReligionModel> religions;
   final ReligionModel? selectedReligion;
   final SacredTextModel? selectedText;
+  final List<SacredTextModel> selectedTexts;
   final bool isLoaded;
   final bool signInDone;
   final bool onboardingDone;
@@ -24,6 +26,7 @@ class ReligionState {
     List<ReligionModel>? religions,
     ReligionModel? selectedReligion,
     SacredTextModel? selectedText,
+    List<SacredTextModel>? selectedTexts,
     bool? isLoaded,
     bool? signInDone,
     bool? onboardingDone,
@@ -31,6 +34,7 @@ class ReligionState {
     religions: religions ?? this.religions,
     selectedReligion: selectedReligion ?? this.selectedReligion,
     selectedText: selectedText ?? this.selectedText,
+    selectedTexts: selectedTexts ?? this.selectedTexts,
     isLoaded: isLoaded ?? this.isLoaded,
     signInDone: signInDone ?? this.signInDone,
     onboardingDone: onboardingDone ?? this.onboardingDone,
@@ -81,11 +85,19 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
     );
   }
 
-  Future<void> selectReligion(ReligionModel religion) async {
-    state = state.copyWith(selectedReligion: religion, selectedText: null);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selected_religion', religion.id);
-    await prefs.remove('selected_text');
+  void selectReligion(ReligionModel religion) {
+    state = state.copyWith(selectedReligion: religion, selectedTexts: []);
+  }
+
+  void toggleText(SacredTextModel text) {
+    final current = List<SacredTextModel>.from(state.selectedTexts);
+    final idx = current.indexWhere((t) => t.id == text.id);
+    if (idx >= 0) {
+      current.removeAt(idx);
+    } else {
+      current.add(text);
+    }
+    state = state.copyWith(selectedTexts: current);
   }
 
   Future<void> selectText(SacredTextModel text) async {
@@ -101,8 +113,18 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
   }
 
   Future<void> completeOnboarding() async {
-    state = state.copyWith(onboardingDone: true);
+    final primary = state.selectedTexts.firstOrNull ?? state.selectedText;
+    state = state.copyWith(
+      onboardingDone: true,
+      selectedText: primary,
+    );
     final prefs = await SharedPreferences.getInstance();
+    if (state.selectedReligion != null) {
+      await prefs.setString('selected_religion', state.selectedReligion!.id);
+    }
+    if (primary != null) {
+      await prefs.setString('selected_text', primary.id);
+    }
     await prefs.setBool('onboarding_done', true);
   }
 }
