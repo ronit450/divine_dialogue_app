@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "981232366558",
+    "project_id": "divine-dialogue-cb2ac",
+    "storage_bucket": "divine-dialogue-cb2ac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:981232366558:android:b103be63f413b82cef234f",
+        "android_client_info": {
+          "package_name": "com.example.divine_dialogue"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "981232366558-skgdr05hq27f5bvts3tu1ndfqosckaa3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.divine_dialogue",
+            "certificate_hash": "c375b0c55f9ce48a7b09a920fe37e2c1b43d7ac3"
+          }
+        },
+        {
+          "client_id": "981232366558-ng654h6fb24eotfto9mqeuu03oelsl40.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtrpREjddOUpaQkzYkBOstmec7M-X4Mnk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "981232366558-ng654h6fb24eotfto9mqeuu03oelsl40.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "981232366558-km1qv8tk7su16td6tnef4bggl0mbgu8s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.divineDialogue"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

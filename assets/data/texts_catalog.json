@@ -1,0 +1,55 @@
+{
+  "religions": [
+    {
+      "id": "islam",
+      "name": "Islam",
+      "accentColor": "1f5d4c",
+      "accentSoft": "e8efe8",
+      "salutation": "As-salamu alaykum",
+      "texts": [
+        {"id": "quran", "title": "The Qurʼan", "description": "114 surahs · 6,236 ayat", "category": "scripture"},
+        {"id": "bukhari", "title": "Sahih al-Bukhari", "description": "Hadith · 7,563 narrations", "category": "hadith"},
+        {"id": "muslim", "title": "Sahih Muslim", "description": "Hadith · 7,500 narrations", "category": "hadith"},
+        {"id": "riyad", "title": "Riyad as-Salihin", "description": "Hadith collection · 1,896", "category": "hadith"}
+      ]
+    },
+    {
+      "id": "hinduism",
+      "name": "Hinduism",
+      "accentColor": "a8521b",
+      "accentSoft": "f4ead8",
+      "salutation": "Namaste",
+      "texts": [
+        {"id": "bhagavad_gita", "title": "Bhagavad Gita", "description": "18 chapters · 700 verses", "category": "scripture"},
+        {"id": "upanishads", "title": "Upanishads", "description": "108 principal texts", "category": "scripture"},
+        {"id": "ramayana", "title": "Ramayana", "description": "Epic · 24,000 verses", "category": "epic"},
+        {"id": "mahabharata", "title": "Mahabharata", "description": "Epic · 100,000 verses", "category": "epic"}
+      ]
+    },
+    {
+      "id": "sikhism",
+      "name": "Sikhism",
+      "accentColor": "1e4d6b",
+      "accentSoft": "dde7ee",
+      "salutation": "Sat Sri Akal",
+      "texts": [
+        {"id": "guru_granth_sahib", "title": "Guru Granth Sahib", "description": "1,430 angs · 5,894 hymns", "category": "scripture"},
+        {"id": "dasam_granth", "title": "Dasam Granth", "description": "Compositions of Guru Gobind Singh", "category": "scripture"},
+        {"id": "janamsakhis", "title": "Janamsakhis", "description": "Biographical narratives", "category": "prose"}
+      ]
+    },
+    {
+      "id": "christianity",
+      "name": "Christianity",
+      "accentColor": "5d4a8a",
+      "accentSoft": "ebe6f0",
+      "salutation": "Peace be with you",
+      "texts": [
+        {"id": "bible_nrsv", "title": "The Bible (NRSV)", "description": "66 books · Old & New Testament", "category": "scripture"},
+        {"id": "gospels", "title": "Gospels", "description": "Matthew · Mark · Luke · John", "category": "scripture"},
+        {"id": "psalms", "title": "Psalms", "description": "150 psalms", "category": "poetry"},
+        {"id": "paul_letters", "title": "Letters of Paul", "description": "13 epistles", "category": "epistle"}
+      ]
+    }
+  ]
+}

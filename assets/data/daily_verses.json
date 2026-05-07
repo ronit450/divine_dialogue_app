@@ -1,0 +1,37 @@
+{
+  "islam": [
+    {"text": "Indeed, with hardship comes ease.", "source": "Quran 94:5", "ref": "Al-Inshirah"},
+    {"text": "And He found you lost and guided you.", "source": "Quran 93:7", "ref": "Ad-Duha"},
+    {"text": "So remember Me; I will remember you.", "source": "Quran 2:152", "ref": "Al-Baqarah"},
+    {"text": "Allah does not burden a soul beyond that it can bear.", "source": "Quran 2:286", "ref": "Al-Baqarah"},
+    {"text": "Whoever saves one life, it is as if he has saved all of mankind.", "source": "Quran 5:32", "ref": "Al-Ma'idah"},
+    {"text": "Seeking knowledge is an obligation upon every Muslim.", "source": "Sunan Ibn Majah 224", "ref": "Hadith"},
+    {"text": "The best of you are those who are best to their families.", "source": "Sunan al-Tirmidhi 3895", "ref": "Hadith"},
+    {"text": "Make things easy, do not make things difficult.", "source": "Sahih al-Bukhari 69", "ref": "Hadith"}
+  ],
+  "hinduism": [
+    {"text": "You have a right to perform your prescribed duties, but you are not entitled to the fruits of your actions.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga"},
+    {"text": "The soul is never born nor dies at any time.", "source": "Bhagavad Gita 2:20", "ref": "Sankhya Yoga"},
+    {"text": "Set thy heart upon thy work, but never on its reward.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga"},
+    {"text": "Through selfless service, you will always be fruitful.", "source": "Bhagavad Gita 3:10", "ref": "Karma Yoga"},
+    {"text": "Whenever righteousness wanes, I send myself forth.", "source": "Bhagavad Gita 4:7", "ref": "Jnana Yoga"},
+    {"text": "The wise grieve neither for the living nor for the dead.", "source": "Bhagavad Gita 2:11", "ref": "Sankhya Yoga"},
+    {"text": "One who sees inaction in action, and action in inaction, is wise.", "source": "Bhagavad Gita 4:18", "ref": "Jnana Yoga"}
+  ],
+  "sikhism": [
+    {"text": "There is but One God. His name is Truth; He is the Creator.", "source": "Guru Granth Sahib Ji, Ang 1", "ref": "Japji Sahib"},
+    {"text": "One who serves the True Guru finds peace.", "source": "Guru Granth Sahib Ji, Ang 40", "ref": "Siree Raag"},
+    {"text": "The body is the temple of the Lord; within it is the jewel of spiritual wisdom.", "source": "Guru Granth Sahib Ji, Ang 1346", "ref": "Parbhati"},
+    {"text": "By His Grace, He blesses us with His Name. With His Name, all hunger is satisfied.", "source": "Guru Granth Sahib Ji, Ang 2", "ref": "Japji Sahib"},
+    {"text": "He who regards all with a single eye and knows them all to be one — he alone is spiritually wise.", "source": "Guru Granth Sahib Ji, Ang 647", "ref": "Sorath"}
+  ],
+  "christianity": [
+    {"text": "For God so loved the world that he gave his one and only Son.", "source": "John 3:16", "ref": "New Testament"},
+    {"text": "I can do all things through Christ who strengthens me.", "source": "Philippians 4:13", "ref": "New Testament"},
+    {"text": "Trust in the Lord with all your heart and lean not on your own understanding.", "source": "Proverbs 3:5", "ref": "Old Testament"},
+    {"text": "The Lord is my shepherd; I shall not want.", "source": "Psalm 23:1", "ref": "Psalms"},
+    {"text": "For I know the plans I have for you, plans to prosper you and not to harm you.", "source": "Jeremiah 29:11", "ref": "Old Testament"},
+    {"text": "Love is patient, love is kind. It does not envy, it does not boast.", "source": "1 Corinthians 13:4", "ref": "New Testament"},
+    {"text": "Ask and it will be given to you; seek and you will find.", "source": "Matthew 7:7", "ref": "New Testament"}
+  ]
+}
