@@ -191,7 +191,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _completeSignIn() async {
-    await ref.read(religionProvider.notifier).completeSignIn();
+    // Don't set signInDone here — profile_setup_screen does it after saving,
+    // preventing the router from redirecting away before we reach /profile-setup
     if (mounted) context.go('/profile-setup');
   }
 
@@ -225,7 +226,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Future<void> _handleGuest() async {
     setState(() => _loading = true);
     await ref.read(religionProvider.notifier).completeSignIn();
-    if (mounted) context.go('/onboarding/religion');
+    if (mounted) context.go('/home');
     if (mounted) setState(() => _loading = false);
   }
 }

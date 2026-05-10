@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
@@ -15,8 +16,15 @@ class LibraryScreen extends ConsumerWidget {
     final religions = state.religions;
     final selected = state.selectedReligion;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+    final surface = isDark ? AppColors.nightSurface : Colors.white;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -28,19 +36,20 @@ class LibraryScreen extends ConsumerWidget {
                   children: [
                     Text(
                       'Library',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: GoogleFonts.cormorantGaramond(
+                        color: fg,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w500,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Browse sacred texts across traditions',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
+                      style: GoogleFonts.inter(
+                        color: muted,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -56,6 +65,11 @@ class LibraryScreen extends ConsumerWidget {
                   religion: religions[i],
                   selectedReligionId: selected?.id,
                   selectedTextId: state.selectedText?.id,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                  line: line,
+                  surface: surface,
                 ),
                 childCount: religions.length,
               ),
@@ -73,11 +87,21 @@ class _ReligionSection extends ConsumerStatefulWidget {
     required this.religion,
     required this.selectedReligionId,
     required this.selectedTextId,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.surface,
   });
 
   final ReligionModel religion;
   final String? selectedReligionId;
   final String? selectedTextId;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final Color surface;
 
   @override
   ConsumerState<_ReligionSection> createState() => _ReligionSectionState();
@@ -113,12 +137,14 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                   decoration: BoxDecoration(
                     color: isActiveReligion
                         ? accent.withValues(alpha: 0.1)
-                        : Colors.white.withValues(alpha: 0.05),
+                        : (widget.isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.02)),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isActiveReligion
                           ? accent.withValues(alpha: 0.3)
-                          : Colors.white.withValues(alpha: 0.08),
+                          : widget.line,
                     ),
                   ),
                   child: Row(
@@ -134,18 +160,18 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                           children: [
                             Text(
                               widget.religion.name,
-                              style: TextStyle(
-                                color: isActiveReligion
-                                    ? accent
-                                    : AppColors.textPrimary,
+                              style: GoogleFonts.inter(
+                                color: isActiveReligion ? accent : widget.fg,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             Text(
                               '${widget.religion.texts.length} texts',
-                              style: TextStyle(
-                                  color: AppColors.textMuted, fontSize: 12),
+                              style: GoogleFonts.inter(
+                                color: widget.muted,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -154,7 +180,7 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                         _expanded
                             ? Icons.keyboard_arrow_up_rounded
                             : Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textMuted,
+                        color: widget.muted,
                         size: 20,
                       ),
                     ],
@@ -183,12 +209,12 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                     decoration: BoxDecoration(
                       color: isActive
                           ? accent.withValues(alpha: 0.08)
-                          : Colors.white.withValues(alpha: 0.03),
+                          : widget.surface.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isActive
                             ? accent.withValues(alpha: 0.25)
-                            : Colors.white.withValues(alpha: 0.06),
+                            : widget.line,
                       ),
                     ),
                     child: Row(
@@ -196,16 +222,16 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                         Icon(
                           Icons.menu_book_rounded,
                           size: 16,
-                          color: isActive ? accent : AppColors.textMuted,
+                          color: isActive ? accent : widget.muted,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             text.title,
-                            style: TextStyle(
+                            style: GoogleFonts.inter(
                               color: isActive
                                   ? accent
-                                  : AppColors.textSecondary,
+                                  : widget.fg.withValues(alpha: 0.7),
                               fontSize: 13,
                               fontWeight: isActive
                                   ? FontWeight.w600

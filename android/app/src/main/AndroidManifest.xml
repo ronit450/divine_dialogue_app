@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="divine_dialogue"
+        android:label="Divine Chat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

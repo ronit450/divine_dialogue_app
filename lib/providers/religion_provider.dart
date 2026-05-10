@@ -112,6 +112,12 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
     await prefs.setBool('sign_in_done', true);
   }
 
+  Future<void> resetSignIn() async {
+    state = state.copyWith(signInDone: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sign_in_done', false);
+  }
+
   Future<void> completeOnboarding() async {
     final primary = state.selectedTexts.firstOrNull ?? state.selectedText;
     state = state.copyWith(

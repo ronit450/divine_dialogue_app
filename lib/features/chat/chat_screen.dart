@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/religion_provider.dart';
@@ -164,7 +165,20 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 16),
+          GestureDetector(
+            onTap: () => GoRouter.of(context).go('/home'),
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: line),
+              ),
+              child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               title,
@@ -236,7 +250,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.message,
     required this.accent,
@@ -252,92 +266,218 @@ class _MessageBubble extends StatelessWidget {
   final Color line;
 
   @override
+  State<_MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<_MessageBubble> {
+  bool _citationsExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final isUser = widget.message.isUser;
+    final hasCitations = !isUser && widget.message.citations.isNotEmpty;
+    final aiBg = widget.isDark ? AppColors.nightSurface : AppColors.boneSurface;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment:
+            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          if (!isUser) ...[
-            Container(
-              width: 28,
-              height: 28,
-              margin: const EdgeInsets.only(right: 8, bottom: 2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accent.withValues(alpha: 0.12),
-                border: Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
-              ),
-              child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
-            ),
-          ],
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isUser ? accent : aiBg,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isUser ? 16 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 16),
+          Row(
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isUser) ...[
+                Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.only(right: 8, bottom: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.accent.withValues(alpha: 0.12),
+                    border: Border.all(
+                        color: widget.accent.withValues(alpha: 0.25), width: 0.5),
+                  ),
+                  child: Icon(Icons.auto_stories_rounded,
+                      color: widget.accent, size: 13),
                 ),
-                border: isUser ? null : Border.all(color: line, width: 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message.text,
+              ],
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isUser ? widget.accent : aiBg,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isUser ? 16 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    ),
+                    border: isUser
+                        ? null
+                        : Border.all(color: widget.line, width: 1),
+                  ),
+                  child: Text(
+                    widget.message.text,
                     style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : fg,
+                      color: isUser ? Colors.white : widget.fg,
                       fontSize: 14,
                       height: 1.5,
                     ),
                   ),
-                  if (message.citations.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: message.citations
-                          .map((c) => _CitationChip(text: c, accent: accent))
-                          .toList(),
+                ),
+              ),
+            ],
+          ),
+          if (hasCitations) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 36),
+              child: GestureDetector(
+                onTap: () =>
+                    setState(() => _citationsExpanded = !_citationsExpanded),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _citationsExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.menu_book_rounded,
+                      size: 12,
+                      color: widget.accent,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _citationsExpanded
+                          ? 'Hide sources'
+                          : '${widget.message.citations.length} source${widget.message.citations.length > 1 ? 's' : ''}',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: widget.accent,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              child: _citationsExpanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 36, top: 6),
+                      child: Column(
+                        children: widget.message.citations
+                            .map((c) => _CitationCard(
+                                  citation: c,
+                                  accent: widget.accent,
+                                  isDark: widget.isDark,
+                                  fg: widget.fg,
+                                  line: widget.line,
+                                ))
+                            .toList(),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _CitationChip extends StatelessWidget {
-  const _CitationChip({required this.text, required this.accent});
+class _CitationCard extends StatelessWidget {
+  const _CitationCard({
+    required this.citation,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.line,
+  });
 
-  final String text;
+  final Citation citation;
   final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color line;
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final hasOriginal = citation.originalText.isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withValues(alpha: 0.3), width: 0.8),
       ),
-      child: Text(
-        text,
-        style: GoogleFonts.jetBrainsMono(color: accent, fontSize: 10, fontWeight: FontWeight.w500),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                citation.reference.toUpperCase(),
+                style: GoogleFonts.jetBrainsMono(
+                  color: accent,
+                  fontSize: 9,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (hasOriginal) ...[
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
+              child: Text(
+                citation.originalText,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: citation.isRtl ? 19 : 15,
+                  height: citation.isRtl ? 2.2 : 1.7,
+                  fontWeight: FontWeight.w400,
+                  fontFamily: citation.isRtl ? null : 'serif',
+                ),
+                textAlign: citation.isRtl ? TextAlign.right : TextAlign.left,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Divider(color: line, height: 1),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            '“${citation.translation}”',
+            style: GoogleFonts.cormorantGaramond(
+              color: fg.withValues(alpha: 0.8),
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              height: 1.55,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -420,7 +560,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   }
 }
 
-class _InputBar extends StatelessWidget {
+class _InputBar extends StatefulWidget {
   const _InputBar({
     required this.controller,
     required this.accent,
@@ -442,15 +582,39 @@ class _InputBar extends StatelessWidget {
   final Color bg;
 
   @override
+  State<_InputBar> createState() => _InputBarState();
+}
+
+class _InputBarState extends State<_InputBar> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) setState(() => _hasText = hasText);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final fieldBg = isDark ? AppColors.nightSurface : Colors.white;
+    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
       decoration: BoxDecoration(
-        color: bg,
-        border: Border(top: BorderSide(color: line, width: 0.5)),
+        color: widget.bg,
+        border: Border(top: BorderSide(color: widget.line, width: 0.5)),
       ),
       child: Row(
         children: [
@@ -459,40 +623,62 @@ class _InputBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: fieldBg,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: line),
+                border: Border.all(color: widget.line),
               ),
               child: TextField(
-                controller: controller,
-                style: GoogleFonts.inter(color: fg, fontSize: 14),
+                controller: widget.controller,
+                style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
                 maxLines: 4,
                 minLines: 1,
                 textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
+                onSubmitted: (_) => widget.onSend(),
                 decoration: InputDecoration(
                   hintText: 'Ask about the text…',
-                  hintStyle: GoogleFonts.inter(color: muted, fontSize: 14),
+                  hintStyle:
+                      GoogleFonts.inter(color: widget.muted, fontSize: 14),
                   border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          GestureDetector(
-            onTap: onSend,
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accent,
-                boxShadow: [
-                  BoxShadow(color: accent.withValues(alpha: 0.3), blurRadius: 10),
-                ],
-              ),
-              child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
-            ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: _hasText
+                ? GestureDetector(
+                    key: const ValueKey('send'),
+                    onTap: widget.onSend,
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.accent,
+                        boxShadow: [
+                          BoxShadow(
+                              color: widget.accent.withValues(alpha: 0.3),
+                              blurRadius: 10),
+                        ],
+                      ),
+                      child: const Icon(Icons.arrow_upward_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  )
+                : Container(
+                    key: const ValueKey('idle'),
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: widget.line),
+                    ),
+                    child: Icon(Icons.auto_awesome_outlined,
+                        color: widget.muted, size: 18),
+                  ),
           ),
         ],
       ),

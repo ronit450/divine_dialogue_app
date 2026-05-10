@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
+import '../../providers/user_provider.dart';
 import '../../core/theme/app_colors.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -46,7 +48,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _navigate(ReligionState state) {
     if (_navigated) return;
     _navigated = true;
-    Future.delayed(const Duration(milliseconds: 2600), () {
+
+    if (state.signInDone) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        ref.read(userProvider.notifier).loadUser(uid);
+      }
+    }
+
+    final delay = (state.signInDone && state.onboardingDone)
+        ? const Duration(milliseconds: 600)
+        : const Duration(milliseconds: 2600);
+    Future.delayed(delay, () {
       if (!mounted) return;
       if (state.onboardingDone) {
         context.go('/home');
@@ -99,7 +112,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  'Divine Dialogue',
+                  'Divine Chat',
                   style: GoogleFonts.cormorantGaramond(
                     color: fg,
                     fontSize: 44,

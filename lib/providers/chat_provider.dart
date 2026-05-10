@@ -94,7 +94,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'Prayer (Salah) is the second pillar of Islam, performed five times daily. '
                 'It establishes a direct connection between the worshipper and Allah, '
                 'purifying the soul and keeping one mindful of God throughout the day.',
-            citations: ['Quran 2:238', 'Sahih Bukhari 1:2:7'],
+            citations: [
+              Citation(
+                reference: 'Quran 2:238',
+                originalText:
+                    'حَافِظُوا عَلَى الصَّلَوَاتِ وَالصَّلَاةِ الْوُسْطَىٰ وَقُومُوا لِلَّهِ قَانِتِينَ',
+                translation:
+                    'Maintain with care the [obligatory] prayers and [in particular] the middle prayer and stand before Allah, devoutly obedient.',
+                isRtl: true,
+              ),
+              Citation(
+                reference: 'Sahih Bukhari 1:2:7',
+                originalText: '',
+                translation:
+                    'Islam is built on five: testifying that there is no god except Allah and that Muhammad is the Messenger of Allah, establishing prayer, giving Zakat, making pilgrimage to the House, and fasting Ramadan.',
+              ),
+            ],
           );
         }
         if (lower.contains('zakat') || lower.contains('charity')) {
@@ -103,7 +118,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'Zakat is the third pillar of Islam — an obligatory almsgiving of 2.5% '
                 'of one\'s savings to those in need. It purifies wealth and fosters '
                 'social solidarity within the Muslim community.',
-            citations: ['Quran 9:60', 'Quran 2:177'],
+            citations: [
+              Citation(
+                reference: 'Quran 9:60',
+                originalText:
+                    'إِنَّمَا الصَّدَقَاتُ لِلْفُقَرَاءِ وَالْمَسَاكِينِ وَالْعَامِلِينَ عَلَيْهَا',
+                translation:
+                    'Zakah expenditures are only for the poor, the needy, and those employed to collect it.',
+                isRtl: true,
+              ),
+              Citation(
+                reference: 'Quran 2:177',
+                originalText:
+                    'وَآتَى الْمَالَ عَلَىٰ حُبِّهِ ذَوِي الْقُرْبَىٰ وَالْيَتَامَىٰ وَالْمَسَاكِينَ',
+                translation:
+                    'And gives wealth, in spite of love for it, to relatives, orphans, the needy, the traveler, those who ask for help, and for freeing slaves.',
+                isRtl: true,
+              ),
+            ],
           );
         }
         return const _MockResponse(
@@ -111,7 +143,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
               'In Islam, knowledge is considered a sacred duty. The Prophet Muhammad ﷺ '
               'said: "Seeking knowledge is an obligation upon every Muslim." '
               'The Quran repeatedly calls upon believers to reflect, reason, and understand.',
-          citations: ['Quran 96:1-5', 'Ibn Majah 224'],
+          citations: [
+            Citation(
+              reference: 'Quran 96:1–5',
+              originalText:
+                  'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ ۝ خَلَقَ الْإِنسَانَ مِنْ عَلَقٍ ۝ اقْرَأْ وَرَبُّكَ الْأَكْرَمُ',
+              translation:
+                  'Read in the name of your Lord who created — created man from a clinging substance. Read, and your Lord is the most Generous.',
+              isRtl: true,
+            ),
+            Citation(
+              reference: 'Ibn Majah 224',
+              originalText: '',
+              translation: 'Seeking knowledge is an obligation upon every Muslim.',
+            ),
+          ],
         );
 
       case 'hinduism':
@@ -121,7 +167,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'Karma is the law of cause and effect in Hindu philosophy. Every action '
                 '(karma) generates a force that returns to the actor. The Bhagavad Gita '
                 'teaches nishkama karma — acting without attachment to outcomes.',
-            citations: ['Bhagavad Gita 3:19', 'Bhagavad Gita 2:47'],
+            citations: [
+              Citation(
+                reference: 'Bhagavad Gita 3:19',
+                originalText:
+                    'tasmād asaktaḥ satataṁ kāryaṁ karma samācara\nasakto hy ācaran karma param āpnoti pūruṣaḥ',
+                translation:
+                    'Therefore, without attachment, always perform the action that should be done; for by performing action without attachment, one attains the Supreme.',
+              ),
+              Citation(
+                reference: 'Bhagavad Gita 2:47',
+                originalText:
+                    'karmaṇy evādhikāras te mā phaleṣu kadācana\nmā karma-phala-hetur bhūr mā te saṅgo \'stvakarmaṇi',
+                translation:
+                    'You have a right to perform your prescribed duties, but you are not entitled to the fruits of your actions. Never consider yourself the cause of the results, nor be attached to inaction.',
+              ),
+            ],
           );
         }
         return const _MockResponse(
@@ -130,7 +191,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
               'moral law, and individual duty. Living in accordance with one\'s dharma '
               'leads toward moksha (liberation). Krishna tells Arjuna in the Gita: '
               '"Better is one\'s own dharma, though imperfectly performed."',
-          citations: ['Bhagavad Gita 3:35', 'Manusmriti 1:1'],
+          citations: [
+            Citation(
+              reference: 'Bhagavad Gita 3:35',
+              originalText:
+                  'śreyān sva-dharmo viguṇaḥ para-dharmāt sv-anuṣṭhitāt\nsva-dharme nidhanaṁ śreyaḥ para-dharmo bhayāvahaḥ',
+              translation:
+                  'Better is one\'s own dharma, though imperfectly performed, than the dharma of another well performed. Death in one\'s own dharma is better; the dharma of another is fraught with danger.',
+            ),
+          ],
         );
 
       case 'sikhism':
@@ -140,7 +209,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'In Sikhism, Waheguru (Wondrous Lord) is the name for the one formless God. '
                 'The Guru Granth Sahib begins with the Mool Mantar: "Ik Onkar" — '
                 'There is One God, the Eternal Truth, Creator of all, without fear or enmity.',
-            citations: ['Guru Granth Sahib, Ang 1', 'Japji Sahib, Pauri 1'],
+            citations: [
+              Citation(
+                reference: 'Guru Granth Sahib · Ang 1',
+                originalText:
+                    'ੴ ਸਤਿ ਨਾਮੁ ਕਰਤਾ ਪੁਰਖੁ ਨਿਰਭਉ ਨਿਰਵੈਰੁ ਅਕਾਲ ਮੂਰਤਿ ਅਜੂਨੀ ਸੈਭੰ ਗੁਰ ਪ੍ਰਸਾਦਿ ॥',
+                translation:
+                    'One Universal Creator God. The Name Is Truth. Creative Being Personified. No Fear. No Hatred. Image Of The Undying. Beyond Birth. Self-Existent. By Guru\'s Grace.',
+              ),
+              Citation(
+                reference: 'Japji Sahib · Pauri 1',
+                originalText:
+                    'ਆਦਿ ਸਚੁ ਜੁਗਾਦਿ ਸਚੁ ॥ ਹੈ ਭੀ ਸਚੁ ਨਾਨਕ ਹੋਸੀ ਭੀ ਸਚੁ ॥',
+                translation:
+                    'True in the primal beginning. True throughout the ages. True here and now. O Nanak, forever and ever True.',
+              ),
+            ],
           );
         }
         return const _MockResponse(
@@ -148,7 +232,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
               'Sikh teaching emphasizes Seva (selfless service) as a path to the Divine. '
               'Guru Nanak Dev Ji taught that serving humanity is serving God. '
               'The Langar (community kitchen) embodies this principle — all sit equal, all are fed.',
-          citations: ['Guru Granth Sahib, Ang 26', 'Guru Granth Sahib, Ang 349'],
+          citations: [
+            Citation(
+              reference: 'Guru Granth Sahib · Ang 26',
+              originalText: 'ਸਚਹੁ ਓਰੈ ਸਭੁ ਕੋ ਉਪਰਿ ਸਚੁ ਆਚਾਰੁ ॥',
+              translation: 'Truth is above everything, but higher still is truthful living.',
+            ),
+            Citation(
+              reference: 'Guru Granth Sahib · Ang 349',
+              originalText:
+                  'ਵਿਚਿ ਦੁਨੀਆ ਸੇਵ ਕਮਾਈਐ ॥ ਤਾ ਦਰਗਹ ਬੈਸਣੁ ਪਾਈਐ ॥',
+              translation:
+                  'In the midst of this world, perform selfless service; then, you will be given a seat in the Court of the Lord.',
+            ),
+          ],
         );
 
       case 'christianity':
@@ -158,7 +255,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 '"Love one another as I have loved you." Jesus placed love at the heart '
                 'of his teaching. The Apostle Paul writes that love is patient, kind, '
                 'and never fails — the greatest of all virtues, greater even than faith and hope.',
-            citations: ['John 13:34', '1 Corinthians 13:4-7', '1 Corinthians 13:13'],
+            citations: [
+              Citation(
+                reference: 'John 13:34',
+                originalText: '',
+                translation:
+                    'A new command I give you: Love one another. As I have loved you, so you must love one another.',
+              ),
+              Citation(
+                reference: '1 Corinthians 13:4–7',
+                originalText: '',
+                translation:
+                    'Love is patient, love is kind. It does not envy, it does not boast, it is not proud. It does not dishonor others, it is not self-seeking, it is not easily angered, it keeps no record of wrongs.',
+              ),
+            ],
           );
         }
         return const _MockResponse(
@@ -166,7 +276,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
               'The Gospel message centers on salvation through grace and faith. '
               '"For God so loved the world that he gave his one and only Son, '
               'that whoever believes in him shall not perish but have eternal life."',
-          citations: ['John 3:16', 'Ephesians 2:8-9', 'Romans 10:9'],
+          citations: [
+            Citation(
+              reference: 'John 3:16',
+              originalText: '',
+              translation:
+                  'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.',
+            ),
+            Citation(
+              reference: 'Ephesians 2:8–9',
+              originalText: '',
+              translation:
+                  'For it is by grace you have been saved, through faith — and this is not from yourselves, it is the gift of God — not by works, so that no one can boast.',
+            ),
+          ],
         );
 
       default:
@@ -184,5 +307,5 @@ class ChatNotifier extends StateNotifier<ChatState> {
 class _MockResponse {
   const _MockResponse({required this.text, required this.citations});
   final String text;
-  final List<String> citations;
+  final List<Citation> citations;
 }

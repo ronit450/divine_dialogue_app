@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../shared/widgets/religion_glyph.dart';
@@ -14,6 +17,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final religionState = ref.watch(religionProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final userState = ref.watch(userProvider);
     final religion = religionState.selectedReligion;
     final accent = religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
 
@@ -23,6 +27,10 @@ class ProfileScreen extends ConsumerWidget {
     final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
     final surface = isDark ? AppColors.nightSurface : Colors.white;
+
+    final displayName = userState.user != null
+        ? '${userState.user!.firstName} ${userState.user!.lastName}'.trim()
+        : (religion?.name ?? 'Guest');
 
     return Scaffold(
       backgroundColor: bg,
@@ -55,27 +63,72 @@ class ProfileScreen extends ConsumerWidget {
                               border: Border.all(color: accent.withValues(alpha: 0.3), width: 1.5),
                             ),
                             child: Center(
-                              child: religion != null
-                                  ? ReligionGlyph(religionId: religion.id, size: 30, color: accent)
-                                  : Icon(Icons.person_outline_rounded, color: accent, size: 32),
+                              child: Text(
+                                displayName.isNotEmpty ? displayName[0].toUpperCase() : 'G',
+                                style: GoogleFonts.cormorantGaramond(
+                                  color: accent, fontSize: 28, fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            religion?.name ?? 'Guest',
+                            displayName,
                             style: GoogleFonts.cormorantGaramond(
-                              color: fg, fontSize: 20, fontWeight: FontWeight.w500,
+                              color: fg, fontSize: 22, fontWeight: FontWeight.w500,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            religionState.selectedText?.title ?? 'No text selected',
+                            religion?.name ?? 'No tradition selected',
                             style: GoogleFonts.inter(color: muted, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                    _SectionLabel(label: 'ACCOUNT', muted: muted),
+                    const SizedBox(height: 10),
+                    _SurfaceCard(
+                      surface: surface,
+                      line: line,
+                      isDark: isDark,
+                      child: Column(
+                        children: [
+                          _ActionRow(
+                            icon: Icons.person_outline_rounded,
+                            label: 'Edit profile',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.go('/profile-setup'),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.menu_book_rounded,
+                            label: 'Change texts',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.go('/onboarding/text'),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.logout_rounded,
+                            label: 'Sign out',
+                            fg: Colors.red.shade400,
+                            muted: muted,
+                            line: line,
+                            onTap: () async {
+                              await ref.read(authProvider.notifier).signOut();
+                              await ref.read(religionProvider.notifier).resetSignIn();
+                              if (context.mounted) context.go('/sign-in');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     _SectionLabel(label: 'TRADITION', muted: muted),
                     const SizedBox(height: 10),
                     _SurfaceCard(
@@ -190,6 +243,45 @@ class _SectionLabel extends StatelessWidget {
       label,
       style: GoogleFonts.jetBrainsMono(
         color: muted, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 1.5,
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: fg, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
+            ),
+            Icon(Icons.chevron_right_rounded, color: muted, size: 18),
+          ],
+        ),
       ),
     );
   }

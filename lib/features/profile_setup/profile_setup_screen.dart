@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,25 +17,37 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _ageController = TextEditingController();
+
+  int _selectedAge = 25;
+  late final FixedExtentScrollController _ageScrollCtrl;
 
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final displayName = FirebaseAuth.instance.currentUser?.displayName ?? '';
+    if (displayName.isNotEmpty) {
+      final parts = displayName.trim().split(' ');
+      _firstNameController.text = parts.first;
+      if (parts.length > 1) {
+        _lastNameController.text = parts.sublist(1).join(' ');
+      }
+    }
+    _ageScrollCtrl = FixedExtentScrollController(initialItem: _selectedAge - 13);
+  }
 
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _ageController.dispose();
+    _ageScrollCtrl.dispose();
     super.dispose();
   }
 
   bool get _isFormValid {
-    final firstName = _firstNameController.text.trim();
-    final lastName = _lastNameController.text.trim();
-    final ageText = _ageController.text.trim();
-    if (firstName.isEmpty || lastName.isEmpty || ageText.isEmpty) return false;
-    final age = int.tryParse(ageText);
-    return age != null && age >= 13 && age <= 120;
+    return _firstNameController.text.trim().isNotEmpty &&
+        _lastNameController.text.trim().isNotEmpty;
   }
 
   Future<void> _handleContinue() async {
@@ -51,11 +62,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             uid: uid,
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            age: int.parse(_ageController.text.trim()),
+            age: _selectedAge,
             photoUrl: photoUrl,
           );
 
-      if (mounted) context.go('/onboarding/religion');
+      await ref.read(religionProvider.notifier).completeSignIn();
+      if (mounted) context.go('/home');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -157,29 +169,104 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 accent: accent,
                 onChanged: (_) => setState(() {}),
               ),
-              _ProfileField(
-                label: 'Age',
-                placeholder: 'e.g. 28',
-                controller: _ageController,
-                fg: fg,
-                muted: muted,
-                line: line,
-                accent: accent,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                onChanged: (_) => setState(() {}),
+              // Age picker section
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: line))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'AGE',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: muted,
+                            fontSize: 10,
+                            letterSpacing: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          'OPTIONAL',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: muted.withValues(alpha: 0.5),
+                            fontSize: 9,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 80,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // center highlight
+                          Center(
+                            child: Container(
+                              width: 52,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                          RotatedBox(
+                            quarterTurns: -1,
+                            child: ListWheelScrollView.useDelegate(
+                              controller: _ageScrollCtrl,
+                              itemExtent: 52,
+                              perspective: 0.002,
+                              physics: const FixedExtentScrollPhysics(),
+                              onSelectedItemChanged: (i) =>
+                                  setState(() => _selectedAge = i + 13),
+                              childDelegate: ListWheelChildBuilderDelegate(
+                                childCount: 88,
+                                builder: (context, i) {
+                                  final age = i + 13;
+                                  final isSelected = age == _selectedAge;
+                                  return RotatedBox(
+                                    quarterTurns: 1,
+                                    child: Center(
+                                      child: AnimatedDefaultTextStyle(
+                                        duration:
+                                            const Duration(milliseconds: 150),
+                                        style: GoogleFonts.inter(
+                                          fontSize: isSelected ? 22 : 15,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: isSelected
+                                              ? accent
+                                              : muted.withValues(alpha: 0.5),
+                                        ),
+                                        child: Text('$age'),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 36),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: FilledButton(
-                  onPressed: (_isFormValid && !_isSubmitting)
-                      ? _handleContinue
-                      : null,
+                  onPressed:
+                      (_isFormValid && !_isSubmitting) ? _handleContinue : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: _isFormValid
                         ? accent
@@ -226,8 +313,6 @@ class _ProfileField extends StatelessWidget {
     required this.line,
     required this.accent,
     required this.onChanged,
-    this.keyboardType,
-    this.inputFormatters,
   });
 
   final String label;
@@ -238,8 +323,6 @@ class _ProfileField extends StatelessWidget {
   final Color line;
   final Color accent;
   final ValueChanged<String> onChanged;
-  final TextInputType? keyboardType;
-  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -264,8 +347,6 @@ class _ProfileField extends StatelessWidget {
           const SizedBox(height: 6),
           TextField(
             controller: controller,
-            keyboardType: keyboardType,
-            inputFormatters: inputFormatters,
             onChanged: onChanged,
             style: GoogleFonts.inter(
               color: fg,

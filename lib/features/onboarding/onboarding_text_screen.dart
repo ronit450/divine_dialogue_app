@@ -37,7 +37,8 @@ class _OnboardingTextScreenState extends ConsumerState<OnboardingTextScreen> {
     await notifier.selectText(primary);
     await notifier.completeOnboarding();
 
-    if (mounted) context.go('/sign-in');
+    final state = ref.read(religionProvider);
+    if (mounted) context.go(state.signInDone ? '/home' : '/sign-in');
   }
 
   @override

@@ -89,14 +89,7 @@ class OnboardingReligionScreen extends ConsumerWidget {
                               onTap: () => ref.read(religionProvider.notifier).selectReligion(religions[i]),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          _AllPathsCard(
-                            religions: religions,
-                            isDark: isDark,
-                            fg: fg,
-                            muted: muted,
-                            line: line,
-                          ),
+
                         ],
                       ),
                     )
@@ -209,87 +202,6 @@ class _ReligionCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _AllPathsCard extends StatelessWidget {
-  const _AllPathsCard({
-    required this.religions,
-    required this.isDark,
-    required this.fg,
-    required this.muted,
-    required this.line,
-  });
-
-  final List<ReligionModel> religions;
-  final bool isDark;
-  final Color fg;
-  final Color muted;
-  final Color line;
-
-  @override
-  Widget build(BuildContext context) {
-    final cardBg = isDark ? AppColors.nightSurface : Colors.white;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: cardBg,
-        border: Border.all(color: line),
-        boxShadow: isDark
-            ? null
-            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 76,
-            height: 32,
-            child: Stack(
-              children: List.generate(religions.length, (i) => Positioned(
-                left: i * 14.0,
-                child: Container(
-                  width: 32, height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: religions[i].accentColor,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Center(
-                    child: ReligionGlyph(religionId: religions[i].id, size: 14, color: Colors.white),
-                  ),
-                ),
-              )).reversed.toList(),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'All paths',
-                  style: GoogleFonts.cormorantGaramond(
-                    color: fg, fontSize: 18, fontWeight: FontWeight.w500, letterSpacing: -0.2,
-                  ),
-                ),
-                Text(
-                  'Compare wisdom across every tradition.',
-                  style: GoogleFonts.inter(color: muted, fontSize: 12, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 22, height: 22,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: muted, width: 1.5),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,3 +1,34 @@
+class Citation {
+  const Citation({
+    required this.reference,
+    required this.originalText,
+    required this.translation,
+    this.isRtl = false,
+  });
+
+  final String reference;
+  final String originalText;
+  final String translation;
+  final bool isRtl;
+
+  Map<String, dynamic> toJson() => {
+    'reference': reference,
+    'originalText': originalText,
+    'translation': translation,
+    'isRtl': isRtl,
+  };
+
+  factory Citation.fromJson(Map<String, dynamic> json) => Citation(
+    reference: json['reference'] as String,
+    originalText: (json['originalText'] as String?) ?? '',
+    translation: (json['translation'] as String?) ?? '',
+    isRtl: (json['isRtl'] as bool?) ?? false,
+  );
+
+  factory Citation.referenceOnly(String reference) =>
+      Citation(reference: reference, originalText: '', translation: reference);
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -11,14 +42,14 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
-  final List<String> citations;
+  final List<Citation> citations;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'text': text,
     'isUser': isUser,
     'timestamp': timestamp.toIso8601String(),
-    'citations': citations,
+    'citations': citations.map((c) => c.toJson()).toList(),
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -26,7 +57,11 @@ class ChatMessage {
     text: json['text'] as String,
     isUser: json['isUser'] as bool,
     timestamp: DateTime.parse(json['timestamp'] as String),
-    citations: List<String>.from(json['citations'] as List),
+    citations: (json['citations'] as List)
+        .map((c) => c is String
+            ? Citation.referenceOnly(c)
+            : Citation.fromJson(c as Map<String, dynamic>))
+        .toList(),
   );
 }
 

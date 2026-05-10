@@ -35,7 +35,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/splash') return null;
 
       if (!signInDone) {
-        const preAuthPaths = ['/onboarding', '/sign-in'];
+        const preAuthPaths = ['/onboarding', '/sign-in', '/profile-setup'];
         final allowed = preAuthPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding';
         return null;
@@ -48,6 +48,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      // Allow text reselection from profile settings even when fully authenticated
+      if (loc == '/onboarding/text') return null;
       const preAuthPaths = ['/onboarding', '/sign-in'];
       if (preAuthPaths.any((p) => loc.startsWith(p))) return '/home';
 

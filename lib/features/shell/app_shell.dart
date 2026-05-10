@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
@@ -19,18 +19,55 @@ class AppShell extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1.0,
+    );
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+  }
+
+  @override
+  void didUpdateWidget(AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shell.currentIndex != widget.shell.currentIndex) {
+      _fadeCtrl.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(religionProvider);
     final accent = state.selectedReligion?.accentColor ?? AppColors.islamGreen;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: shell,
+      body: FadeTransition(opacity: _fadeAnim, child: widget.shell),
       bottomNavigationBar: _NavBar(
-        currentIndex: shell.currentIndex,
+        currentIndex: widget.shell.currentIndex,
         accent: accent,
         isDark: isDark,
-        onTap: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),
+        onTap: (i) => widget.shell.goBranch(
+          i,
+          initialLocation: i == widget.shell.currentIndex,
+        ),
       ),
     );
   }
