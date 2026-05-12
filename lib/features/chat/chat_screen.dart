@@ -83,6 +83,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (messages.isNotEmpty) _scrollToBottom();
+      if (chatState.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(chatState.error!, style: GoogleFonts.inter(fontSize: 13)),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     });
 
     return Scaffold(
@@ -250,7 +259,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _MessageBubble extends StatefulWidget {
+class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.accent,
@@ -265,18 +274,31 @@ class _MessageBubble extends StatefulWidget {
   final Color fg;
   final Color line;
 
-  @override
-  State<_MessageBubble> createState() => _MessageBubbleState();
-}
-
-class _MessageBubbleState extends State<_MessageBubble> {
-  bool _citationsExpanded = false;
+  void _showCitationsSheet(BuildContext context) {
+    final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _CitationsSheet(
+        citations: message.citations,
+        accent: accent,
+        isDark: isDark,
+        fg: fg,
+        muted: muted,
+        line: line,
+        sheetBg: sheetBg,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isUser = widget.message.isUser;
-    final hasCitations = !isUser && widget.message.citations.isNotEmpty;
-    final aiBg = widget.isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final isUser = message.isUser;
+    final hasCitations = !isUser && message.citations.isNotEmpty;
+    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -296,12 +318,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   margin: const EdgeInsets.only(right: 8, bottom: 2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: widget.accent.withValues(alpha: 0.12),
+                    color: accent.withValues(alpha: 0.12),
                     border: Border.all(
-                        color: widget.accent.withValues(alpha: 0.25), width: 0.5),
+                        color: accent.withValues(alpha: 0.25), width: 0.5),
                   ),
-                  child: Icon(Icons.auto_stories_rounded,
-                      color: widget.accent, size: 13),
+                  child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
                 ),
               ],
               Flexible(
@@ -311,21 +332,19 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isUser ? widget.accent : aiBg,
+                    color: isUser ? accent : aiBg,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
                       bottomLeft: Radius.circular(isUser ? 16 : 4),
                       bottomRight: Radius.circular(isUser ? 4 : 16),
                     ),
-                    border: isUser
-                        ? null
-                        : Border.all(color: widget.line, width: 1),
+                    border: isUser ? null : Border.all(color: line, width: 1),
                   ),
                   child: Text(
-                    widget.message.text,
+                    message.text,
                     style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : widget.fg,
+                      color: isUser ? Colors.white : fg,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -339,56 +358,126 @@ class _MessageBubbleState extends State<_MessageBubble> {
             Padding(
               padding: const EdgeInsets.only(left: 36),
               child: GestureDetector(
-                onTap: () =>
-                    setState(() => _citationsExpanded = !_citationsExpanded),
+                onTap: () => _showCitationsSheet(context),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      _citationsExpanded
-                          ? Icons.expand_less_rounded
-                          : Icons.menu_book_rounded,
-                      size: 12,
-                      color: widget.accent,
-                    ),
+                    Icon(Icons.menu_book_rounded, size: 12, color: accent),
                     const SizedBox(width: 4),
                     Text(
-                      _citationsExpanded
-                          ? 'Hide sources'
-                          : '${widget.message.citations.length} source${widget.message.citations.length > 1 ? 's' : ''}',
+                      '${message.citations.length} source${message.citations.length > 1 ? 's' : ''}',
                       style: GoogleFonts.jetBrainsMono(
-                        color: widget.accent,
+                        color: accent,
                         fontSize: 10,
                         letterSpacing: 0.5,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(width: 3),
+                    Icon(Icons.open_in_new_rounded, size: 9, color: accent),
                   ],
                 ),
               ),
             ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              child: _citationsExpanded
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 36, top: 6),
-                      child: Column(
-                        children: widget.message.citations
-                            .map((c) => _CitationCard(
-                                  citation: c,
-                                  accent: widget.accent,
-                                  isDark: widget.isDark,
-                                  fg: widget.fg,
-                                  line: widget.line,
-                                ))
-                            .toList(),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _CitationsSheet extends StatelessWidget {
+  const _CitationsSheet({
+    required this.citations,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.sheetBg,
+  });
+
+  final List<Citation> citations;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final Color sheetBg;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.62,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 4),
+                decoration: BoxDecoration(
+                  color: line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accent.withValues(alpha: 0.1),
+                    ),
+                    child: Icon(Icons.menu_book_rounded, color: accent, size: 14),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'SCRIPTURE REFERENCES',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: accent,
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${citations.length} passage${citations.length > 1 ? 's' : ''}',
+                    style: GoogleFonts.inter(color: muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Divider(color: line, height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: citations.length,
+                itemBuilder: (_, i) => _CitationCard(
+                  citation: citations[i],
+                  accent: accent,
+                  isDark: isDark,
+                  fg: fg,
+                  line: line,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

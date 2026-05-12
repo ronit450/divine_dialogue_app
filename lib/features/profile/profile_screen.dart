@@ -30,7 +30,7 @@ class ProfileScreen extends ConsumerWidget {
 
     final displayName = userState.user != null
         ? '${userState.user!.firstName} ${userState.user!.lastName}'.trim()
-        : (religion?.name ?? 'Guest');
+        : 'Guest';
 
     return Scaffold(
       backgroundColor: bg,
@@ -39,16 +39,33 @@ class ProfileScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Self',
-                      style: GoogleFonts.cormorantGaramond(
-                        color: fg, fontSize: 32, fontWeight: FontWeight.w500,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => context.go('/home'),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: line),
+                            ),
+                            child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Settings',
+                          style: GoogleFonts.cormorantGaramond(
+                            color: fg, fontSize: 28, fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 28),
                     Center(
@@ -168,6 +185,22 @@ class ProfileScreen extends ConsumerWidget {
                         fg: fg,
                         muted: muted,
                         onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _SectionLabel(label: 'DEVELOPER', muted: muted),
+                    const SizedBox(height: 10),
+                    _SurfaceCard(
+                      surface: surface,
+                      line: line,
+                      isDark: isDark,
+                      child: _ActionRow(
+                        icon: Icons.people_outline_rounded,
+                        label: 'Meet the team',
+                        fg: fg,
+                        muted: muted,
+                        line: line,
+                        onTap: () => context.push('/developers'),
                       ),
                     ),
                     const SizedBox(height: 24),

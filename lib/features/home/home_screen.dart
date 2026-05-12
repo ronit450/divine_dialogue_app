@@ -49,9 +49,6 @@ class HomeScreen extends ConsumerWidget {
           children: [
             _TopBar(
               dateLabel: dateLabel,
-              firstName: firstName,
-              accent: accent,
-              accentSoft: accentSoft,
               fg: fg,
               muted: muted,
             ),
@@ -120,17 +117,11 @@ class HomeScreen extends ConsumerWidget {
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.dateLabel,
-    required this.firstName,
-    required this.accent,
-    required this.accentSoft,
     required this.fg,
     required this.muted,
   });
 
   final String dateLabel;
-  final String firstName;
-  final Color accent;
-  final Color accentSoft;
   final Color fg;
   final Color muted;
 
@@ -147,35 +138,6 @@ class _TopBar extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w500,
               letterSpacing: 1.0,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: fg.withValues(alpha: 0.1)),
-            ),
-            child: Icon(Icons.menu_rounded, color: fg, size: 18),
-          ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accentSoft,
-            ),
-            child: Center(
-              child: Text(
-                firstName.isNotEmpty ? firstName[0].toUpperCase() : 'F',
-                style: GoogleFonts.cormorantGaramond(
-                  color: accent,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
             ),
           ),
         ],

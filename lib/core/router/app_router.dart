@@ -14,6 +14,7 @@ import '../../features/chat/chat_screen.dart';
 import '../../features/library/library_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/developers/developers_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
@@ -80,11 +81,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile-setup',
         builder: (context, state) => const ProfileSetupScreen(),
       ),
-      // History navigated to from profile tab — outside shell so it pushes on top
       GoRoute(
         path: '/history',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const HistoryScreen(),
+      ),
+      GoRoute(
+        path: '/developers',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const DevelopersScreen(),
       ),
       StatefulShellRoute.indexedStack(
         parentNavigatorKey: _rootKey,
