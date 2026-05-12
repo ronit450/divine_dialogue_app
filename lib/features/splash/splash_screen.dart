@@ -45,28 +45,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
-  void _navigate(ReligionState state) {
+  Future<void> _navigate(ReligionState state) async {
     if (_navigated) return;
     _navigated = true;
 
+    final minDelay = Future.delayed(
+      state.signInDone && state.onboardingDone
+          ? const Duration(milliseconds: 600)
+          : const Duration(milliseconds: 2600),
+    );
+
     if (state.signInDone) {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        ref.read(userProvider.notifier).loadUser(uid);
+      // authStateChanges().first waits for Firebase Auth to restore its persisted session,
+      // avoiding the race where currentUser is null right after cold start.
+      final user = await FirebaseAuth.instance.authStateChanges().first;
+      if (user != null && mounted) {
+        await ref.read(userProvider.notifier).loadUser(user.uid);
       }
     }
 
-    final delay = (state.signInDone && state.onboardingDone)
-        ? const Duration(milliseconds: 600)
-        : const Duration(milliseconds: 2600);
-    Future.delayed(delay, () {
-      if (!mounted) return;
-      if (state.onboardingDone) {
-        context.go('/home');
-      } else {
-        context.go('/onboarding');
-      }
-    });
+    await minDelay;
+    if (!mounted) return;
+    if (state.onboardingDone) {
+      context.go('/home');
+    } else {
+      context.go('/onboarding');
+    }
   }
 
   @override

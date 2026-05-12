@@ -15,7 +15,7 @@ class AppShell extends ConsumerStatefulWidget {
     _Tab(label: 'Home'),
     _Tab(label: 'Dialogue'),
     _Tab(label: 'Read'),
-    _Tab(label: 'Self'),
+    _Tab(label: 'Settings'),
   ];
 
   @override
