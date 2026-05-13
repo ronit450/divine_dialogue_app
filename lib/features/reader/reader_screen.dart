@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/scripture.dart';
@@ -31,7 +30,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _currentChapter = 1;
   bool _loading = true;
   String? _error;
-  final Set<int> _expandedTranslit = {};
+  bool _showTranslation = true;
+  bool _showTranslit = true;
 
   @override
   void initState() {
@@ -45,14 +45,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
   }
 
+  bool get _isPagedType =>
+      _meta!.type == ScriptureTextType.ggs ||
+      _meta!.type == ScriptureTextType.dasam ||
+      _meta!.type == ScriptureTextType.bgv;
+
   Future<void> _load() async {
     final saved = ref.read(scripturePositionProvider).getPosition(widget.textId);
     _currentChapter = widget.initialChapter ?? saved.$1;
     try {
-      if (_meta!.type == ScriptureTextType.ggs) {
-        _verses = await _repo.loadGgsAng(_currentChapter);
-        if (_currentChapter > 1) _repo.loadGgsAng(_currentChapter - 1);
-        if (_currentChapter < 1430) _repo.loadGgsAng(_currentChapter + 1);
+      if (_isPagedType) {
+        _verses = await _loadPagedVerses(_currentChapter);
+        _prefetch(_currentChapter);
       } else {
         _chapters = await _repo.loadChapters(widget.textId);
         _verses = _versesFor(_currentChapter);
@@ -62,6 +66,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<List<ScriptureVerse>> _loadPagedVerses(int page) {
+    return switch (_meta!.type) {
+      ScriptureTextType.ggs   => _repo.loadGgsAng(page),
+      ScriptureTextType.dasam => _repo.loadDasamPage(page),
+      ScriptureTextType.bgv   => _repo.loadBgvVaar(page),
+      _ => Future.value([]),
+    };
+  }
+
+  void _prefetch(int page) {
+    final max = _meta!.totalChapters;
+    if (page > 1) _loadPagedVerses(page - 1);
+    if (page < max) _loadPagedVerses(page + 1);
   }
 
   List<ScriptureVerse> _versesFor(int num) {
@@ -74,15 +93,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   Future<void> _goTo(int num) async {
-    final maxChapter = _meta!.type == ScriptureTextType.ggs ? 1430 : _chapters.length;
-    if (num < 1 || num > maxChapter) return;
-    setState(() { _loading = true; _expandedTranslit.clear(); });
+    final max = _meta!.totalChapters;
+    if (num < 1 || num > max) return;
+    setState(() => _loading = true);
     _currentChapter = num;
     try {
-      if (_meta!.type == ScriptureTextType.ggs) {
-        _verses = await _repo.loadGgsAng(num);
-        if (num > 1) _repo.loadGgsAng(num - 1);
-        if (num < 1430) _repo.loadGgsAng(num + 1);
+      if (_isPagedType) {
+        _verses = await _loadPagedVerses(num);
+        _prefetch(num);
       } else {
         _verses = _versesFor(num);
       }
@@ -98,7 +116,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = ReligionColors.accent(_meta!.religionId);
     int? result;
-    if (_meta!.type == ScriptureTextType.ggs) {
+    if (_isPagedType) {
       result = await showGgsTocSheet(
         context: context, currentAng: _currentChapter, accent: accent, isDark: isDark,
       );
@@ -111,8 +129,68 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (result != null) await _goTo(result);
   }
 
+  void _openReadingOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+    final accent = _meta != null ? ReligionColors.accent(_meta!.religionId) : AppColors.islamGreen;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'READING OPTIONS',
+                style: GoogleFonts.jetBrainsMono(
+                  color: muted, fontSize: 9, letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _optionRow('Translation', _showTranslation, accent, fg, line, (v) {
+                setState(() => _showTranslation = v);
+                setSheet(() {});
+              }),
+              Divider(height: 1, color: line),
+              if (_meta?.hasTransliteration ?? false)
+                _optionRow('Transliteration', _showTranslit, accent, fg, line, (v) {
+                  setState(() => _showTranslit = v);
+                  setSheet(() {});
+                }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _optionRow(
+    String label, bool value, Color accent, Color fg, Color line,
+    ValueChanged<bool> onChanged,
+  ) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
+            Switch.adaptive(value: value, onChanged: onChanged, activeTrackColor: accent),
+          ],
+        ),
+      );
+
   String get _title {
-    if (_meta!.type == ScriptureTextType.ggs) return _meta!.title;
+    if (_isPagedType) return _meta!.title;
     if (_chapters.isEmpty) return _meta!.title;
     return _chapters.firstWhere(
       (c) => c.number == _currentChapter, orElse: () => _chapters.first,
@@ -120,7 +198,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   String get _subLabel {
-    if (_meta!.type == ScriptureTextType.ggs) return 'Ang $_currentChapter of 1,430';
+    if (_isPagedType) return '${_meta!.chapterLabel} $_currentChapter of ${_meta!.totalChapters}';
     if (_chapters.isEmpty) return '';
     final ch = _chapters.firstWhere(
       (c) => c.number == _currentChapter, orElse: () => _chapters.first,
@@ -150,7 +228,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 6, 12, 4),
               child: Row(
@@ -171,6 +248,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  GestureDetector(
+                    onTap: _openReadingOptions,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: accent.withValues(alpha: 0.3)),
+                      ),
+                      child: Icon(Icons.tune_rounded, size: 14, color: accent),
+                    ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -184,7 +274,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ],
               ),
             ),
-            // Sub-header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Row(
@@ -203,7 +292,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
             Divider(height: 1, color: line),
-            // Content
             Expanded(
               child: _loading
                   ? Center(child: CircularProgressIndicator(strokeWidth: 1.5, color: accent))
@@ -219,16 +307,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             accent: accent,
                             fg: fg,
                             muted: muted,
-                            isExpanded: _expandedTranslit.contains(i),
-                            onToggleTranslit: () => setState(() {
-                              _expandedTranslit.contains(i)
-                                  ? _expandedTranslit.remove(i)
-                                  : _expandedTranslit.add(i);
-                            }),
+                            showTranslation: _showTranslation,
+                            showTranslit: _showTranslit,
                           ),
                         ),
             ),
-            // Bottom bar
             Container(
               height: 52,
               decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: line))),
@@ -240,23 +323,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     color: _currentChapter > 1 ? fg : muted,
                     onTap: _currentChapter > 1 ? () => _goTo(_currentChapter - 1) : null,
                   ),
-                  _navBtn(icon: Icons.favorite_border_rounded, color: muted, onTap: () {}),
                   _navBtn(
-                    icon: Icons.ios_share_rounded,
-                    color: muted,
-                    onTap: _verses.isNotEmpty
-                        ? () {
-                            final text = _verses.first.translation;
-                            Clipboard.setData(ClipboardData(text: text));
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Copied', style: GoogleFonts.inter(fontSize: 13)),
-                              duration: const Duration(seconds: 1),
-                              backgroundColor: accent,
-                            ));
-                          }
-                        : null,
+                    icon: Icons.arrow_forward_ios_rounded,
+                    color: _currentChapter < (_meta?.totalChapters ?? 1) ? fg : muted,
+                    onTap: _currentChapter < (_meta?.totalChapters ?? 1) ? () => _goTo(_currentChapter + 1) : null,
                   ),
-                  _navBtn(icon: Icons.arrow_forward_ios_rounded, color: fg, onTap: () => _goTo(_currentChapter + 1)),
                 ],
               ),
             ),
@@ -273,8 +344,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       );
 }
 
-// ── Verse Card ──
-
 class _VerseCard extends StatelessWidget {
   const _VerseCard({
     required this.verse,
@@ -282,8 +351,8 @@ class _VerseCard extends StatelessWidget {
     required this.accent,
     required this.fg,
     required this.muted,
-    required this.isExpanded,
-    required this.onToggleTranslit,
+    required this.showTranslation,
+    required this.showTranslit,
   });
 
   final ScriptureVerse verse;
@@ -291,13 +360,15 @@ class _VerseCard extends StatelessWidget {
   final Color accent;
   final Color fg;
   final Color muted;
-  final bool isExpanded;
-  final VoidCallback onToggleTranslit;
+  final bool showTranslation;
+  final bool showTranslit;
 
   @override
   Widget build(BuildContext context) => switch (type) {
         ScriptureTextType.quran => _quranCard(),
-        ScriptureTextType.ggs   => _ggsCard(),
+        ScriptureTextType.ggs   => _sikhCard(),
+        ScriptureTextType.dasam => _sikhCard(),
+        ScriptureTextType.bgv   => _sikhCard(),
         ScriptureTextType.gita  => _gitaCard(),
         ScriptureTextType.bible => _bibleCard(),
       };
@@ -328,12 +399,13 @@ class _VerseCard extends StatelessWidget {
                 ),
               ),
             ),
-            Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
+            if (showTranslation)
+              Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
           ],
         ),
       );
 
-  Widget _ggsCard() => Padding(
+  Widget _sikhCard() => Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,8 +424,22 @@ class _VerseCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 17, height: 1.9, color: accent),
               ),
-            const SizedBox(height: 8),
-            Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
+            if (showTranslit && verse.transliteration != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                verse.transliteration!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 12, height: 1.6,
+                  color: fg.withValues(alpha: 0.6),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+            if (showTranslation) ...[
+              const SizedBox(height: 6),
+              Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
+            ],
           ],
         ),
       );
@@ -369,18 +455,16 @@ class _VerseCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, height: 1.9, color: accent, fontFamily: 'serif'),
               ),
-            const SizedBox(height: 10),
-            Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
-            if (verse.transliteration != null) ...[
+            if (showTranslit && verse.transliteration != null) ...[
               const SizedBox(height: 8),
-              _chip('Transliteration ▾'),
-              if (isExpanded) ...[
-                const SizedBox(height: 8),
-                Text(
-                  verse.transliteration!,
-                  style: GoogleFonts.inter(fontSize: 12, height: 1.6, color: fg, fontStyle: FontStyle.italic),
-                ),
-              ],
+              Text(
+                verse.transliteration!,
+                style: GoogleFonts.inter(fontSize: 12, height: 1.6, color: fg, fontStyle: FontStyle.italic),
+              ),
+            ],
+            if (showTranslation) ...[
+              const SizedBox(height: 8),
+              Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
             ],
           ],
         ),
@@ -400,18 +484,6 @@ class _VerseCard extends StatelessWidget {
             Expanded(child: Text(verse.translation,
               style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg))),
           ],
-        ),
-      );
-
-  Widget _chip(String label) => GestureDetector(
-        onTap: onToggleTranslit,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-          decoration: BoxDecoration(
-            border: Border.all(color: muted.withValues(alpha: 0.3)),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(label, style: GoogleFonts.jetBrainsMono(fontSize: 8, color: muted)),
         ),
       );
 }

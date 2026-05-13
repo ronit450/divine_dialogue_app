@@ -74,4 +74,6 @@ flutter:
     - assets/data/scripture/bible.json
     - assets/data/scripture/gita.json
     - assets/data/scripture/ggs/
+    - assets/data/scripture/dasam/
+    - assets/data/scripture/bgv/
     - .env

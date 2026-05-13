@@ -1,4 +1,4 @@
-enum ScriptureTextType { quran, bible, gita, ggs }
+enum ScriptureTextType { quran, bible, gita, ggs, dasam, bgv }
 
 class ScriptureVerse {
   final int number;
@@ -57,15 +57,28 @@ class ScriptureTextMeta {
     required this.totalChapters,
   });
 
+  bool get hasTransliteration => type == ScriptureTextType.ggs ||
+      type == ScriptureTextType.dasam ||
+      type == ScriptureTextType.bgv ||
+      type == ScriptureTextType.gita;
+
   static ScriptureTextMeta? forTextId(String textId) => switch (textId) {
     'quran' => const ScriptureTextMeta(
         id: 'quran', title: 'The Qurʼan', religionId: 'islam',
         type: ScriptureTextType.quran, chapterLabel: 'Surah',
         verseLabel: 'Ayah', totalChapters: 114),
     'guru_granth_sahib' => const ScriptureTextMeta(
-        id: 'guru_granth_sahib', title: 'Guru Granth Sahib', religionId: 'sikhism',
+        id: 'guru_granth_sahib', title: 'Sri Guru Granth Sahib Ji', religionId: 'sikhism',
         type: ScriptureTextType.ggs, chapterLabel: 'Ang',
         verseLabel: 'Line', totalChapters: 1430),
+    'dasam_granth' => const ScriptureTextMeta(
+        id: 'dasam_granth', title: 'Dasam Bani', religionId: 'sikhism',
+        type: ScriptureTextType.dasam, chapterLabel: 'Page',
+        verseLabel: 'Line', totalChapters: 1428),
+    'bhai_gurdas_vaaran' => const ScriptureTextMeta(
+        id: 'bhai_gurdas_vaaran', title: 'Bhai Gurdas Ji Vaaran', religionId: 'sikhism',
+        type: ScriptureTextType.bgv, chapterLabel: 'Vaar',
+        verseLabel: 'Pauri', totalChapters: 40),
     'bhagavad_gita' => const ScriptureTextMeta(
         id: 'bhagavad_gita', title: 'Bhagavad Gita', religionId: 'hinduism',
         type: ScriptureTextType.gita, chapterLabel: 'Chapter',

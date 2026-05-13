@@ -33,9 +33,9 @@
       "accentSoft": "dde7ee",
       "salutation": "Sat Sri Akal",
       "texts": [
-        {"id": "guru_granth_sahib", "title": "Guru Granth Sahib", "description": "1,430 angs · 5,894 hymns", "category": "scripture"},
-        {"id": "dasam_granth", "title": "Dasam Granth", "description": "Compositions of Guru Gobind Singh", "category": "scripture"},
-        {"id": "janamsakhis", "title": "Janamsakhis", "description": "Biographical narratives", "category": "prose"}
+        {"id": "guru_granth_sahib", "title": "Sri Guru Granth Sahib Ji", "description": "1,430 angs · 60,403 lines", "category": "scripture"},
+        {"id": "dasam_granth", "title": "Dasam Bani", "description": "1,428 pages · Guru Gobind Singh Ji", "category": "scripture"},
+        {"id": "bhai_gurdas_vaaran", "title": "Bhai Gurdas Ji Vaaran", "description": "40 vaaran · 7,383 lines", "category": "scripture"}
       ]
     },
     {

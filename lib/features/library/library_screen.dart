@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +13,7 @@ class LibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(religionProvider);
     final religions = state.religions;
-    final selected = state.selectedReligion;
+    final selectedReligion = state.selectedReligion;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -22,6 +21,15 @@ class LibraryScreen extends ConsumerWidget {
     final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
     final surface = isDark ? AppColors.nightSurface : Colors.white;
+
+    final activeReligion = selectedReligion ??
+        (religions.isNotEmpty ? religions.first : null);
+
+    if (activeReligion == null) {
+      return Scaffold(backgroundColor: bg);
+    }
+
+    final accent = ReligionColors.accent(activeReligion.id);
 
     return Scaffold(
       backgroundColor: bg,
@@ -34,22 +42,47 @@ class LibraryScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Library',
-                      style: GoogleFonts.cormorantGaramond(
-                        color: fg,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'LIBRARY',
+                                style: GoogleFonts.jetBrainsMono(
+                                  color: muted,
+                                  fontSize: 10,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                activeReligion.name,
+                                style: GoogleFonts.cormorantGaramond(
+                                  color: fg,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w500,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: line),
+                          ),
+                          child: Icon(Icons.search_rounded, size: 17, color: muted),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Browse sacred texts across traditions',
-                      style: GoogleFonts.inter(
-                        color: muted,
-                        fontSize: 13,
-                      ),
+                      'Tap any text to begin reading.',
+                      style: GoogleFonts.inter(color: muted, fontSize: 13),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -57,202 +90,245 @@ class LibraryScreen extends ConsumerWidget {
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) => _ReligionSection(
-                  religion: religions[i],
-                  selectedReligionId: selected?.id,
-                  selectedTextId: state.selectedText?.id,
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
-                  line: line,
-                  surface: surface,
+
+          // Hero card for primary text
+          if (activeReligion.texts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _HeroTextCard(
+                  text: activeReligion.texts.first,
+                  religion: activeReligion,
+                  accent: accent,
+                  isSelected: activeReligion.texts.first.id == state.selectedText?.id,
                 ),
-                childCount: religions.length,
               ),
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+
+          // Other texts
+          if (activeReligion.texts.length > 1) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                child: Text(
+                  'OTHER TEXTS · ${activeReligion.texts.length - 1}',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: muted, fontSize: 9, letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final text = activeReligion.texts[i + 1];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _TextListTile(
+                        text: text,
+                        accent: accent,
+                        fg: fg,
+                        muted: muted,
+                        line: line,
+                        surface: surface,
+                        onTap: () => context.push('/read/${text.id}'),
+                      ),
+                    );
+                  },
+                  childCount: activeReligion.texts.length - 1,
+                ),
+              ),
+            ),
+          ],
+
+          const SliverToBoxAdapter(child: SizedBox(height: 48)),
         ],
       ),
     );
   }
 }
 
-class _ReligionSection extends ConsumerStatefulWidget {
-  const _ReligionSection({
+class _HeroTextCard extends StatelessWidget {
+  const _HeroTextCard({
+    required this.text,
     required this.religion,
-    required this.selectedReligionId,
-    required this.selectedTextId,
-    required this.isDark,
+    required this.accent,
+    required this.isSelected,
+  });
+
+  final SacredTextModel text;
+  final ReligionModel religion;
+  final Color accent;
+  final bool isSelected;
+
+  String _watermarkGlyph(String religionId) => switch (religionId) {
+    'sikhism'      => 'ਆਦਿ ਸਚੁ',
+    'islam'        => 'الله',
+    'hinduism'     => 'ॐ',
+    'christianity' => '✝',
+    _ => '✦',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/read/${text.id}'),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: accent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              right: -16,
+              top: -12,
+              child: Text(
+                _watermarkGlyph(religion.id),
+                style: TextStyle(
+                  fontSize: 90,
+                  color: Colors.white.withValues(alpha: 0.08),
+                  fontFamily: 'serif',
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isSelected ? 'CURRENT TEXT' : 'PRIMARY TEXT',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 9,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  text.title,
+                  style: GoogleFonts.cormorantGaramond(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w500,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text.description,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isSelected ? 'CONTINUE READING' : 'BEGIN READING',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white,
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TextListTile extends StatelessWidget {
+  const _TextListTile({
+    required this.text,
+    required this.accent,
     required this.fg,
     required this.muted,
     required this.line,
     required this.surface,
+    required this.onTap,
   });
 
-  final ReligionModel religion;
-  final String? selectedReligionId;
-  final String? selectedTextId;
-  final bool isDark;
+  final SacredTextModel text;
+  final Color accent;
   final Color fg;
   final Color muted;
   final Color line;
   final Color surface;
+  final VoidCallback onTap;
 
-  @override
-  ConsumerState<_ReligionSection> createState() => _ReligionSectionState();
-}
-
-class _ReligionSectionState extends ConsumerState<_ReligionSection> {
-  late bool _expanded;
-
-  @override
-  void initState() {
-    super.initState();
-    _expanded = widget.religion.id == widget.selectedReligionId;
+  String _abbrev(String title) {
+    final words = title.split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words[0].substring(0, words[0].length.clamp(0, 3)).toUpperCase();
+    return words.take(2).map((w) => w[0].toUpperCase()).join();
   }
 
   @override
   Widget build(BuildContext context) {
-    final accent = ReligionColors.accent(widget.religion.id);
-    final isActiveReligion = widget.religion.id == widget.selectedReligionId;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isActiveReligion
-                        ? accent.withValues(alpha: 0.1)
-                        : (widget.isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : Colors.black.withValues(alpha: 0.02)),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isActiveReligion
-                          ? accent.withValues(alpha: 0.3)
-                          : widget.line,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        _symbol(widget.religion.id),
-                        style: TextStyle(fontSize: 22, color: accent),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.religion.name,
-                              style: GoogleFonts.inter(
-                                color: isActiveReligion ? accent : widget.fg,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              '${widget.religion.texts.length} texts',
-                              style: GoogleFonts.inter(
-                                color: widget.muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        _expanded
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                        color: widget.muted,
-                        size: 20,
-                      ),
-                    ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: line),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  _abbrev(text.title),
+                  style: GoogleFonts.jetBrainsMono(
+                    color: accent, fontSize: 11,
+                    fontWeight: FontWeight.w600, letterSpacing: 0.5,
                   ),
                 ),
               ),
             ),
-          ),
-          if (_expanded)
-            ...widget.religion.texts.map((text) {
-              final isActive = text.id == widget.selectedTextId &&
-                  widget.religion.id == widget.selectedReligionId;
-              return Padding(
-                padding: const EdgeInsets.only(top: 8, left: 12),
-                child: GestureDetector(
-                  onTap: () {
-                    context.push('/read/${text.id}');
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? accent.withValues(alpha: 0.08)
-                          : widget.surface.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isActive
-                            ? accent.withValues(alpha: 0.25)
-                            : widget.line,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.menu_book_rounded,
-                          size: 16,
-                          color: isActive ? accent : widget.muted,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            text.title,
-                            style: GoogleFonts.inter(
-                              color: isActive
-                                  ? accent
-                                  : widget.fg.withValues(alpha: 0.7),
-                              fontSize: 13,
-                              fontWeight: isActive
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                        if (isActive)
-                          Icon(Icons.check_rounded, color: accent, size: 14),
-                      ],
-                    ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    text.title,
+                    style: GoogleFonts.inter(color: fg, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
-                ),
-              );
-            }),
-        ],
+                  const SizedBox(height: 2),
+                  Text(text.description, style: GoogleFonts.inter(color: muted, fontSize: 12)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: muted, size: 20),
+          ],
+        ),
       ),
     );
   }
-
-  String _symbol(String id) => switch (id) {
-    'islam' => '☪',
-    'hinduism' => '🕉',
-    'sikhism' => '☬',
-    'christianity' => '✝',
-    _ => '✦',
-  };
 }
