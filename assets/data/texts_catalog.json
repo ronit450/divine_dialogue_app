@@ -8,9 +8,12 @@
       "salutation": "As-salamu alaykum",
       "texts": [
         {"id": "quran", "title": "The Qurʼan", "description": "114 surahs · 6,236 ayat", "category": "scripture"},
-        {"id": "bukhari", "title": "Sahih al-Bukhari", "description": "Hadith · 7,563 narrations", "category": "hadith"},
-        {"id": "muslim", "title": "Sahih Muslim", "description": "Hadith · 7,500 narrations", "category": "hadith"},
-        {"id": "riyad", "title": "Riyad as-Salihin", "description": "Hadith collection · 1,896", "category": "hadith"}
+        {"id": "bukhari", "title": "Sahih al-Bukhari", "description": "Hadith · 7,277 narrations · 97 chapters", "category": "hadith"},
+        {"id": "muslim", "title": "Sahih Muslim", "description": "Hadith · 7,459 narrations · 57 chapters", "category": "hadith"},
+        {"id": "abu_dawud", "title": "Sunan Abu Dawud", "description": "Hadith · 5,276 narrations · 43 chapters", "category": "hadith"},
+        {"id": "tirmidhi", "title": "Jami' at-Tirmidhi", "description": "Hadith · 4,053 narrations · 49 chapters", "category": "hadith"},
+        {"id": "nasai", "title": "Sunan an-Nasai", "description": "Hadith · 5,768 narrations · 52 chapters", "category": "hadith"},
+        {"id": "ibn_majah", "title": "Sunan Ibn Majah", "description": "Hadith · 4,345 narrations · 38 chapters", "category": "hadith"}
       ]
     },
     {
@@ -21,9 +24,7 @@
       "salutation": "Namaste",
       "texts": [
         {"id": "bhagavad_gita", "title": "Bhagavad Gita", "description": "18 chapters · 700 verses", "category": "scripture"},
-        {"id": "upanishads", "title": "Upanishads", "description": "108 principal texts", "category": "scripture"},
-        {"id": "ramayana", "title": "Ramayana", "description": "Epic · 24,000 verses", "category": "epic"},
-        {"id": "mahabharata", "title": "Mahabharata", "description": "Epic · 100,000 verses", "category": "epic"}
+        {"id": "valmiki_ramayana", "title": "Valmiki Ramayana", "description": "7 kandas · 648 sargas · 23,402 verses", "category": "epic"}
       ]
     },
     {
@@ -33,9 +34,9 @@
       "accentSoft": "dde7ee",
       "salutation": "Sat Sri Akal",
       "texts": [
-        {"id": "guru_granth_sahib", "title": "Guru Granth Sahib", "description": "1,430 angs · 5,894 hymns", "category": "scripture"},
-        {"id": "dasam_granth", "title": "Dasam Granth", "description": "Compositions of Guru Gobind Singh", "category": "scripture"},
-        {"id": "janamsakhis", "title": "Janamsakhis", "description": "Biographical narratives", "category": "prose"}
+        {"id": "guru_granth_sahib", "title": "Sri Guru Granth Sahib Ji", "description": "1,430 angs · 60,403 lines", "category": "scripture"},
+        {"id": "dasam_granth", "title": "Dasam Bani", "description": "1,428 pages · Guru Gobind Singh Ji", "category": "scripture"},
+        {"id": "bhai_gurdas_vaaran", "title": "Bhai Gurdas Ji Vaaran", "description": "40 vaaran · 7,383 lines", "category": "scripture"}
       ]
     },
     {

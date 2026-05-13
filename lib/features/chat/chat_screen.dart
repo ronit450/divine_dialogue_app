@@ -48,6 +48,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
+  void _startNewChat() {
+    final rState = ref.read(religionProvider);
+    final religion = rState.selectedReligion;
+    final text = rState.selectedText;
+    if (religion != null && text != null) {
+      ref.read(chatProvider.notifier).startNewSession(
+        religionId: religion.id,
+        textId: text.id,
+        textTitle: text.title,
+      );
+    }
+  }
+
   void _send() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -103,6 +116,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         fg: fg,
         line: line,
         bg: bg,
+        onNewChat: _startNewChat,
       ),
       body: Column(
         children: [
@@ -151,6 +165,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.fg,
     required this.line,
     required this.bg,
+    required this.onNewChat,
   });
 
   final String title;
@@ -159,6 +174,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Color fg;
   final Color line;
   final Color bg;
+  final VoidCallback onNewChat;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -199,7 +215,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           IconButton(
             icon: Icon(Icons.add_comment_outlined, color: accent, size: 20),
-            onPressed: () {},
+            onPressed: onNewChat,
           ),
         ],
       ),

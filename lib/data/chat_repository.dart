@@ -1,51 +1,47 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/models/chat_message.dart';
 
 class ChatRepository {
   ChatRepository._();
   static final ChatRepository instance = ChatRepository._();
 
-  static const _sessionsKey = 'chat_sessions';
+  final _db = FirebaseFirestore.instance;
+
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  CollectionReference<Map<String, dynamic>> _conv(String uid) =>
+      _db.collection('users').doc(uid).collection('conversations');
 
   Future<List<ChatSession>> loadSessions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionsKey);
-    if (raw == null) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((s) => ChatSession.fromJson(s as Map<String, dynamic>))
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final uid = _uid;
+    if (uid == null) return [];
+    final snap = await _conv(uid)
+        .orderBy('updatedAt', descending: true)
+        .get();
+    return snap.docs.map((d) => ChatSession.fromJson(d.data())).toList();
   }
 
   Future<void> saveSession(ChatSession session) async {
-    final sessions = await loadSessions();
-    final idx = sessions.indexWhere((s) => s.id == session.id);
-    if (idx >= 0) {
-      sessions[idx] = session;
-    } else {
-      sessions.insert(0, session);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _sessionsKey,
-      jsonEncode(sessions.map((s) => s.toJson()).toList()),
-    );
+    final uid = _uid;
+    if (uid == null) return;
+    await _conv(uid).doc(session.id).set(session.toJson());
   }
 
   Future<void> deleteSession(String sessionId) async {
-    final sessions = await loadSessions();
-    sessions.removeWhere((s) => s.id == sessionId);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _sessionsKey,
-      jsonEncode(sessions.map((s) => s.toJson()).toList()),
-    );
+    final uid = _uid;
+    if (uid == null) return;
+    await _conv(uid).doc(sessionId).delete();
   }
 
   Future<void> clearAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionsKey);
+    final uid = _uid;
+    if (uid == null) return;
+    final snap = await _conv(uid).get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 }

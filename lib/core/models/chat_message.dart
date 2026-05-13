@@ -116,7 +116,12 @@ class ChatSession {
     messages: (json['messages'] as List)
         .map((m) => ChatMessage.fromJson(m as Map<String, dynamic>))
         .toList(),
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    updatedAt: DateTime.parse(json['updatedAt'] as String),
+    createdAt: _parseDate(json['createdAt']),
+    updatedAt: _parseDate(json['updatedAt']),
   );
+
+  static DateTime _parseDate(dynamic v) {
+    if (v is String) return DateTime.parse(v);
+    return DateTime.now();
+  }
 }
