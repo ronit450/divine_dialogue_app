@@ -53,8 +53,8 @@ class HomeScreen extends ConsumerWidget {
               muted: muted,
             ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -93,14 +93,13 @@ class HomeScreen extends ConsumerWidget {
                         line: line,
                         onTap: () => context.go('/chat'),
                       ),
-                    const Spacer(),
+                    const SizedBox(height: 32),
                     _BeginDialogueButton(
                       accent: accent,
                       fg: fg,
                       bg: bg,
                       onTap: () => context.go('/chat'),
                     ),
-                    const SizedBox(height: 28),
                   ],
                 ),
               ),
