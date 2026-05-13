@@ -31,9 +31,28 @@ class ScriptureRepository {
   Future<List<ScriptureVerse>> loadBgvVaar(int vaar) async =>
       _loadPagedText('bhai_gurdas_vaaran', vaar, 'bgv', 'bgv', 40, 10);
 
+  Future<List<ScriptureVerse>> loadRamayanaSarga(int sarga) async =>
+      _loadPagedText('valmiki_ramayana', sarga, 'valmiki_ramayana', 'ramayana', 648, 50,
+          chunkLoader: _loadRamayanaChunk);
+
+  Future<List<ScriptureVerse>> loadHadithChapter(String textId, int chapter) async =>
+      _loadPagedText(textId, chapter, textId, textId, _hadithChapterCount(textId), 10,
+          chunkLoader: _loadHadithChunk);
+
+  int _hadithChapterCount(String textId) => switch (textId) {
+    'bukhari'   => 97,
+    'muslim'    => 57,
+    'abu_dawud' => 43,
+    'tirmidhi'  => 49,
+    'nasai'     => 52,
+    'ibn_majah' => 38,
+    _ => 1,
+  };
+
   Future<List<ScriptureVerse>> _loadPagedText(
-    String textId, int page, String dir, String prefix, int maxPage, int pagesPerChunk,
-  ) async {
+    String textId, int page, String dir, String prefix, int maxPage, int pagesPerChunk, {
+    Future<void> Function(String, String, int, Map<int, List<ScriptureVerse>>)? chunkLoader,
+  }) async {
     _pageCache.putIfAbsent(textId, () => {});
     _loadedChunks.putIfAbsent(textId, () => {});
 
@@ -44,7 +63,7 @@ class ScriptureRepository {
 
     final chunkIdx = ((page - 1) ~/ pagesPerChunk).clamp(0, (maxPage ~/ pagesPerChunk) + 1);
     if (!loaded.contains(chunkIdx)) {
-      await _loadChunk(dir, prefix, chunkIdx, cache);
+      await (chunkLoader ?? _loadChunk)(dir, prefix, chunkIdx, cache);
       loaded.add(chunkIdx);
     }
     return cache[page] ?? [];
@@ -80,6 +99,60 @@ class ScriptureRepository {
     });
   }
 
+  Future<void> _loadRamayanaChunk(
+    String dir, String prefix, int idx,
+    Map<int, List<ScriptureVerse>> cache,
+  ) async {
+    final label = idx.toString().padLeft(3, '0');
+    final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    data.forEach((sargaStr, verses) {
+      final sarga = int.parse(sargaStr);
+      final verseList = verses as List<dynamic>;
+      final result = <ScriptureVerse>[];
+      for (int i = 0; i < verseList.length; i++) {
+        final v = verseList[i] as Map<String, dynamic>;
+        final kanda = v['kanda'] as String?;
+        final sargaNum = v['sarga'] as int?;
+        result.add(ScriptureVerse(
+          number: (v['n'] as num).toInt(),
+          original: (v['sa'] as String?)?.isNotEmpty == true ? v['sa'] as String : null,
+          translation: v['e'] as String? ?? '',
+          transliteration: (v['t'] as String?)?.isNotEmpty == true ? v['t'] as String : null,
+          isGroupStart: i == 0,
+          groupLabel: i == 0 && kanda != null ? '$kanda · Sarga $sargaNum' : null,
+        ));
+      }
+      cache[sarga] = result;
+    });
+  }
+
+  Future<void> _loadHadithChunk(
+    String dir, String prefix, int idx,
+    Map<int, List<ScriptureVerse>> cache,
+  ) async {
+    final label = idx.toString().padLeft(3, '0');
+    final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    data.forEach((chStr, hadiths) {
+      final ch = int.parse(chStr);
+      final hadithList = hadiths as List<dynamic>;
+      final verses = <ScriptureVerse>[];
+      for (int i = 0; i < hadithList.length; i++) {
+        final h = hadithList[i] as Map<String, dynamic>;
+        verses.add(ScriptureVerse(
+          number: int.tryParse(h['n'] as String? ?? '') ?? (i + 1),
+          original: (h['a'] as String?)?.isNotEmpty == true ? h['a'] as String : null,
+          translation: h['e'] as String? ?? '',
+          wordMeanings: '${h['nr'] ?? ''}\n${h['gr'] ?? ''}',
+          isGroupStart: i == 0,
+          groupLabel: i == 0 ? h['ch'] as String? : null,
+        ));
+      }
+      cache[ch] = verses;
+    });
+  }
+
   Future<List<ScriptureChapter>> _loadQuran() async {
     final raw = await rootBundle.loadString('assets/data/scripture/quran.json');
     final surahs = jsonDecode(raw) as List<dynamic>;
@@ -93,6 +166,7 @@ class ScriptureRepository {
           number: vm['n'] as int,
           original: vm['ar'] as String?,
           translation: vm['en'] as String? ?? '',
+          transliteration: vm['tr'] as String?,
         );
       }).toList();
       return ScriptureChapter(

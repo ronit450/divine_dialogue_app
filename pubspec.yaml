@@ -76,4 +76,11 @@ flutter:
     - assets/data/scripture/ggs/
     - assets/data/scripture/dasam/
     - assets/data/scripture/bgv/
+    - assets/data/scripture/bukhari/
+    - assets/data/scripture/muslim/
+    - assets/data/scripture/abu_dawud/
+    - assets/data/scripture/tirmidhi/
+    - assets/data/scripture/nasai/
+    - assets/data/scripture/ibn_majah/
+    - assets/data/scripture/valmiki_ramayana/
     - .env

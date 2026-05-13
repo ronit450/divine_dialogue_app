@@ -1,4 +1,4 @@
-enum ScriptureTextType { quran, bible, gita, ggs, dasam, bgv }
+enum ScriptureTextType { quran, bible, gita, ggs, dasam, bgv, hadith, ramayana }
 
 class ScriptureVerse {
   final int number;
@@ -57,10 +57,12 @@ class ScriptureTextMeta {
     required this.totalChapters,
   });
 
-  bool get hasTransliteration => type == ScriptureTextType.ggs ||
+  bool get hasTransliteration => type == ScriptureTextType.quran ||
+      type == ScriptureTextType.ggs ||
       type == ScriptureTextType.dasam ||
       type == ScriptureTextType.bgv ||
-      type == ScriptureTextType.gita;
+      type == ScriptureTextType.gita ||
+      type == ScriptureTextType.ramayana;
 
   static ScriptureTextMeta? forTextId(String textId) => switch (textId) {
     'quran' => const ScriptureTextMeta(
@@ -87,6 +89,34 @@ class ScriptureTextMeta {
         id: 'bible_nrsv', title: 'The Bible (KJV)', religionId: 'christianity',
         type: ScriptureTextType.bible, chapterLabel: 'Book',
         verseLabel: 'Verse', totalChapters: 66),
+    'valmiki_ramayana' => const ScriptureTextMeta(
+        id: 'valmiki_ramayana', title: 'Valmiki Ramayana', religionId: 'hinduism',
+        type: ScriptureTextType.ramayana, chapterLabel: 'Sarga',
+        verseLabel: 'Verse', totalChapters: 648),
+    'bukhari' => const ScriptureTextMeta(
+        id: 'bukhari', title: 'Sahih al-Bukhari', religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 97),
+    'muslim' => const ScriptureTextMeta(
+        id: 'muslim', title: 'Sahih Muslim', religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 57),
+    'abu_dawud' => const ScriptureTextMeta(
+        id: 'abu_dawud', title: 'Sunan Abu Dawud', religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 43),
+    'tirmidhi' => const ScriptureTextMeta(
+        id: 'tirmidhi', title: "Jami' at-Tirmidhi", religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 49),
+    'nasai' => const ScriptureTextMeta(
+        id: 'nasai', title: 'Sunan an-Nasai', religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 52),
+    'ibn_majah' => const ScriptureTextMeta(
+        id: 'ibn_majah', title: 'Sunan Ibn Majah', religionId: 'islam',
+        type: ScriptureTextType.hadith, chapterLabel: 'Chapter',
+        verseLabel: 'Hadith', totalChapters: 38),
     _ => null,
   };
 }

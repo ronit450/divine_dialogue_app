@@ -25,9 +25,10 @@ Future<int?> showTocSheet({
   );
 }
 
-Future<int?> showGgsTocSheet({
+Future<int?> showPagedTocSheet({
   required BuildContext context,
-  required int currentAng,
+  required ScriptureTextMeta meta,
+  required int currentPage,
   required Color accent,
   required bool isDark,
 }) {
@@ -35,8 +36,9 @@ Future<int?> showGgsTocSheet({
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _GgsTocSheet(
-      currentAng: currentAng,
+    builder: (_) => _PagedTocSheet(
+      meta: meta,
+      currentPage: currentPage,
       accent: accent,
       isDark: isDark,
     ),
@@ -272,28 +274,30 @@ class _TocSheetState extends State<_TocSheet> {
   }
 }
 
-class _GgsTocSheet extends StatefulWidget {
-  const _GgsTocSheet({
-    required this.currentAng,
+class _PagedTocSheet extends StatefulWidget {
+  const _PagedTocSheet({
+    required this.meta,
+    required this.currentPage,
     required this.accent,
     required this.isDark,
   });
 
-  final int currentAng;
+  final ScriptureTextMeta meta;
+  final int currentPage;
   final Color accent;
   final bool isDark;
 
   @override
-  State<_GgsTocSheet> createState() => _GgsTocSheetState();
+  State<_PagedTocSheet> createState() => _PagedTocSheetState();
 }
 
-class _GgsTocSheetState extends State<_GgsTocSheet> {
+class _PagedTocSheetState extends State<_PagedTocSheet> {
   late final TextEditingController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = TextEditingController(text: '${widget.currentAng}');
+    _ctrl = TextEditingController(text: '${widget.currentPage}');
   }
 
   @override
@@ -302,21 +306,32 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
     super.dispose();
   }
 
+  List<int> get _quickJumps {
+    final total = widget.meta.totalChapters;
+    final step = (total / 8).round().clamp(1, 9999);
+    final jumps = <int>[1];
+    for (int v = step; v < total; v += step) { jumps.add(v); }
+    if (jumps.last != total) jumps.add(total);
+    return jumps;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? AppColors.nightBg : AppColors.boneBg;
     final fg = widget.isDark ? AppColors.nightFg : AppColors.boneFg;
     final muted = widget.isDark ? AppColors.nightMuted : AppColors.boneMuted;
     final line = widget.isDark ? AppColors.nightLine : AppColors.boneLine;
+    final total = widget.meta.totalChapters;
+    final label = widget.meta.chapterLabel;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.55,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
@@ -332,12 +347,12 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '1,430 Angs'.toUpperCase(),
+                  '$total ${label}s'.toUpperCase(),
                   style: GoogleFonts.jetBrainsMono(fontSize: 9, letterSpacing: 2, color: muted),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Jump to an Ang',
+                  'Jump to a $label',
                   style: GoogleFonts.cormorantGaramond(
                     fontSize: 24, fontWeight: FontWeight.w500,
                     fontStyle: FontStyle.italic, color: fg,
@@ -360,7 +375,7 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
                           style: GoogleFonts.jetBrainsMono(fontSize: 18, color: fg),
                           decoration: InputDecoration(
                             isDense: true, border: InputBorder.none,
-                            hintText: '1 – 1430',
+                            hintText: '1 – $total',
                             hintStyle: GoogleFonts.jetBrainsMono(fontSize: 18, color: muted),
                             contentPadding: EdgeInsets.zero,
                           ),
@@ -370,9 +385,9 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
                     const SizedBox(width: 12),
                     GestureDetector(
                       onTap: () {
-                        final ang = int.tryParse(_ctrl.text);
-                        if (ang != null && ang >= 1 && ang <= 1430) {
-                          Navigator.pop(context, ang);
+                        final page = int.tryParse(_ctrl.text);
+                        if (page != null && page >= 1 && page <= total) {
+                          Navigator.pop(context, page);
                         }
                       },
                       child: Container(
@@ -407,10 +422,10 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: [1, 100, 200, 400, 600, 800, 1000, 1200, 1430].map((ang) {
-                    final isActive = ang == widget.currentAng;
+                  children: _quickJumps.map((p) {
+                    final isActive = p == widget.currentPage;
                     return GestureDetector(
-                      onTap: () => Navigator.pop(context, ang),
+                      onTap: () => Navigator.pop(context, p),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
@@ -421,7 +436,7 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
                           border: Border.all(color: isActive ? widget.accent : line),
                         ),
                         child: Text(
-                          'Ang $ang',
+                          '$label $p',
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 10, color: isActive ? Colors.white : muted,
                           ),
@@ -433,7 +448,9 @@ class _GgsTocSheetState extends State<_GgsTocSheet> {
               ],
             ),
           ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
         ],
+        ),
       ),
     );
   }

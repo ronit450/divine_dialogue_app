@@ -5,7 +5,7 @@ import '../../core/models/scripture.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
-import 'toc_sheet.dart';
+import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
 class ReaderScreen extends ConsumerStatefulWidget {
   const ReaderScreen({
@@ -48,7 +48,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool get _isPagedType =>
       _meta!.type == ScriptureTextType.ggs ||
       _meta!.type == ScriptureTextType.dasam ||
-      _meta!.type == ScriptureTextType.bgv;
+      _meta!.type == ScriptureTextType.bgv ||
+      _meta!.type == ScriptureTextType.hadith ||
+      _meta!.type == ScriptureTextType.ramayana;
 
   Future<void> _load() async {
     final saved = ref.read(scripturePositionProvider).getPosition(widget.textId);
@@ -70,9 +72,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Future<List<ScriptureVerse>> _loadPagedVerses(int page) {
     return switch (_meta!.type) {
-      ScriptureTextType.ggs   => _repo.loadGgsAng(page),
-      ScriptureTextType.dasam => _repo.loadDasamPage(page),
-      ScriptureTextType.bgv   => _repo.loadBgvVaar(page),
+      ScriptureTextType.ggs    => _repo.loadGgsAng(page),
+      ScriptureTextType.dasam  => _repo.loadDasamPage(page),
+      ScriptureTextType.bgv    => _repo.loadBgvVaar(page),
+      ScriptureTextType.hadith   => _repo.loadHadithChapter(widget.textId, page),
+      ScriptureTextType.ramayana => _repo.loadRamayanaSarga(page),
       _ => Future.value([]),
     };
   }
@@ -117,8 +121,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final accent = ReligionColors.accent(_meta!.religionId);
     int? result;
     if (_isPagedType) {
-      result = await showGgsTocSheet(
-        context: context, currentAng: _currentChapter, accent: accent, isDark: isDark,
+      result = await showPagedTocSheet(
+        context: context, meta: _meta!, currentPage: _currentChapter,
+        accent: accent, isDark: isDark,
       );
     } else {
       result = await showTocSheet(
@@ -276,19 +281,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _loading ? '' : _subLabel.toUpperCase(),
-                      style: GoogleFonts.jetBrainsMono(fontSize: 9, letterSpacing: 1.5, color: muted),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _openToc,
-                    child: Icon(Icons.format_list_bulleted_rounded, size: 18, color: muted),
-                  ),
-                ],
+              child: Text(
+                _loading ? '' : _subLabel.toUpperCase(),
+                style: GoogleFonts.jetBrainsMono(fontSize: 9, letterSpacing: 1.5, color: muted),
               ),
             ),
             Divider(height: 1, color: line),
@@ -322,6 +317,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     icon: Icons.arrow_back_ios_rounded,
                     color: _currentChapter > 1 ? fg : muted,
                     onTap: _currentChapter > 1 ? () => _goTo(_currentChapter - 1) : null,
+                  ),
+                  _navBtn(
+                    icon: Icons.format_list_bulleted_rounded,
+                    color: muted,
+                    onTap: _openToc,
                   ),
                   _navBtn(
                     icon: Icons.arrow_forward_ios_rounded,
@@ -365,13 +365,75 @@ class _VerseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => switch (type) {
-        ScriptureTextType.quran => _quranCard(),
-        ScriptureTextType.ggs   => _sikhCard(),
-        ScriptureTextType.dasam => _sikhCard(),
-        ScriptureTextType.bgv   => _sikhCard(),
-        ScriptureTextType.gita  => _gitaCard(),
-        ScriptureTextType.bible => _bibleCard(),
+        ScriptureTextType.quran  => _quranCard(),
+        ScriptureTextType.ggs    => _sikhCard(),
+        ScriptureTextType.dasam  => _sikhCard(),
+        ScriptureTextType.bgv    => _sikhCard(),
+        ScriptureTextType.gita    => _gitaCard(),
+        ScriptureTextType.bible   => _bibleCard(),
+        ScriptureTextType.hadith  => _hadithCard(),
+        ScriptureTextType.ramayana => _gitaCard(),
       };
+
+  Widget _hadithCard() {
+    final meta = verse.wordMeanings ?? '';
+    final parts = meta.split('\n');
+    final narrator = parts.isNotEmpty ? parts[0].trim() : '';
+    final grade = parts.length > 1 ? parts[1].trim() : '';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (verse.isGroupStart && (verse.groupLabel?.isNotEmpty ?? false))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                verse.groupLabel!.toUpperCase(),
+                style: GoogleFonts.jetBrainsMono(fontSize: 8, letterSpacing: 2, color: muted),
+              ),
+            ),
+          if (verse.original != null) ...[
+            Text(
+              verse.original!,
+              textAlign: TextAlign.right,
+              textDirection: TextDirection.rtl,
+              style: const TextStyle(fontSize: 16, height: 2.0, fontFamily: 'serif'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (showTranslation) ...[
+            Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (narrator.isNotEmpty)
+                  Expanded(
+                    child: Text(
+                      narrator,
+                      style: GoogleFonts.inter(fontSize: 11, color: muted, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                if (grade.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      grade,
+                      style: GoogleFonts.jetBrainsMono(fontSize: 8, color: accent),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _quranCard() => Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -399,6 +461,14 @@ class _VerseCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (showTranslit && verse.transliteration != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  verse.transliteration!,
+                  style: GoogleFonts.inter(fontSize: 12, height: 1.6, color: muted, fontStyle: FontStyle.italic),
+                ),
+              ),
             if (showTranslation)
               Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
           ],
