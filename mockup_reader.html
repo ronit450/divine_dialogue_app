@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Divine Dialogue — Read Screen Mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Noto+Nastaliq+Urdu&family=Noto+Sans+Gurmukhi:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bone-bg:      #F5F3EE;
+  --bone-fg:      #1A1814;
+  --bone-muted:   #8A8070;
+  --bone-line:    #E2DDD6;
+  --islam:        #1F5D4C;
+  --islam-soft:   #EAF1EE;
+  --sikh:         #1E4D6B;
+  --hindu:        #A8521B;
+  --ff-display:   'Cormorant Garamond', serif;
+  --ff-body:      'Inter', sans-serif;
+  --ff-mono:      'JetBrains Mono', monospace;
+}
+
+body {
+  background: #1C1A17;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px 60px;
+}
+
+h1.page-title {
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 28px;
+  color: #E8E3DA;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+p.page-sub {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #5A5248;
+  text-transform: uppercase;
+  margin-bottom: 48px;
+}
+
+.phones-row {
+  display: flex;
+  gap: 36px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* ── PHONE FRAME ── */
+.phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+.phone-label {
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #4A4540;
+  text-transform: uppercase;
+}
+
+.phone {
+  width: 296px;
+  height: 640px;
+  background: var(--bone-bg);
+  border-radius: 46px;
+  border: 6px solid #2A2620;
+  box-shadow:
+    0 0 0 1px #3A3530,
+    0 28px 72px rgba(0,0,0,0.65),
+    inset 0 0 0 1px rgba(255,255,255,0.03);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dynamic-island {
+  width: 88px;
+  height: 24px;
+  background: #2A2620;
+  border-radius: 12px;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+/* Status bar */
+.status-bar {
+  height: 46px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 22px 7px;
+  flex-shrink: 0;
+}
+.sb-time {
+  font-family: var(--ff-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bone-fg);
+}
+.sb-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--bone-fg);
+}
+.sb-bars {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.sb-bars span {
+  width: 3px;
+  background: var(--bone-fg);
+  border-radius: 1px;
+}
+
+/* Nav header */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 18px 7px;
+  flex-shrink: 0;
+}
+.nav-back {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bone-fg);
+  font-size: 17px;
+}
+.nav-title {
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 17px;
+  color: var(--bone-fg);
+}
+.nav-badge {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  font-weight: 500;
+  padding: 0 7px;
+}
+.badge-islam { background: var(--islam); color: #fff; }
+.badge-sikh  { background: var(--sikh);  color: #fff; }
+.badge-hindu { background: var(--hindu); color: #fff; }
+
+/* Sub-nav */
+.sub-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px 9px;
+  flex-shrink: 0;
+}
+.sub-label {
+  font-family: var(--ff-mono);
+  font-size: 8.5px;
+  letter-spacing: 1.5px;
+  color: var(--bone-muted);
+  text-transform: uppercase;
+}
+.toc-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.toc-icon span {
+  display: block;
+  width: 15px;
+  height: 1.5px;
+  background: var(--bone-muted);
+  border-radius: 1px;
+}
+
+.rule { height: 1px; background: var(--bone-line); margin: 0 18px; flex-shrink: 0; }
+
+/* Reader body */
+.reader-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 18px;
+  scrollbar-width: none;
+}
+.reader-body::-webkit-scrollbar { display: none; }
+
+.section-head {
+  font-family: var(--ff-mono);
+  font-size: 7.5px;
+  letter-spacing: 2px;
+  color: var(--bone-muted);
+  text-transform: uppercase;
+  padding: 15px 0 5px;
+}
+
+.verse-block {
+  padding: 16px 0 14px;
+  border-bottom: 1px solid var(--bone-line);
+}
+.verse-block:last-child { border-bottom: none; }
+
+/* Arabic */
+.arabic {
+  direction: rtl;
+  text-align: right;
+  font-family: 'Noto Nastaliq Urdu', 'Traditional Arabic', 'Arabic Typesetting', serif;
+  font-size: 19px;
+  line-height: 2.1;
+  color: var(--bone-fg);
+  margin-bottom: 5px;
+}
+
+.ayah-num-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 9px;
+}
+.ayah-num {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1.5px solid var(--islam);
+  color: var(--islam);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ff-mono);
+  font-size: 8.5px;
+}
+
+.translation {
+  font-family: var(--ff-body);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--bone-fg);
+  margin-bottom: 9px;
+}
+
+.chip-row { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.translit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--ff-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.5px;
+  color: var(--bone-muted);
+  border: 1px solid var(--bone-line);
+  border-radius: 20px;
+  padding: 3px 9px;
+}
+
+/* Gurmukhi */
+.gurmukhi {
+  font-family: 'Noto Sans Gurmukhi', sans-serif;
+  font-size: 16px;
+  line-height: 2;
+  color: var(--sikh);
+  text-align: center;
+  margin-bottom: 9px;
+}
+
+/* Sanskrit */
+.sanskrit {
+  font-family: 'Noto Sans Devanagari', serif;
+  font-size: 13.5px;
+  line-height: 2;
+  color: var(--hindu);
+  text-align: center;
+  margin-bottom: 9px;
+}
+
+/* Bottom bar */
+.bottom-bar {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 18px 6px;
+  background: linear-gradient(to top, var(--bone-bg) 75%, transparent);
+  flex-shrink: 0;
+}
+.bb-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bone-fg);
+  font-size: 15px;
+  border-radius: 50%;
+}
+
+/* ── TOC SCREEN ── */
+.toc-peek {
+  padding: 46px 18px 0;
+  opacity: 0.14;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.toc-backdrop {
+  flex: 1;
+  background: rgba(26,24,20,0.38);
+  flex-shrink: 0;
+  min-height: 60px;
+}
+.toc-sheet {
+  background: var(--bone-bg);
+  border-radius: 18px 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 3;
+}
+.sheet-handle {
+  width: 30px;
+  height: 3px;
+  background: var(--bone-line);
+  border-radius: 2px;
+  margin: 9px auto 13px;
+  flex-shrink: 0;
+}
+.toc-meta {
+  font-family: var(--ff-mono);
+  font-size: 7.5px;
+  letter-spacing: 2px;
+  color: var(--bone-muted);
+  text-transform: uppercase;
+  padding: 0 18px 3px;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--bone-fg);
+  padding: 0 18px 12px;
+  flex-shrink: 0;
+}
+.search-box {
+  margin: 0 18px 10px;
+  background: #fff;
+  border: 1px solid var(--bone-line);
+  border-radius: 11px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.search-placeholder {
+  font-family: var(--ff-body);
+  font-size: 11.5px;
+  color: #C0BAB2;
+}
+.filter-chips {
+  display: flex;
+  gap: 5px;
+  padding: 0 18px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.filter-chips::-webkit-scrollbar { display: none; }
+.fchip {
+  font-family: var(--ff-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.5px;
+  padding: 4px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--bone-line);
+  color: var(--bone-muted);
+  white-space: nowrap;
+}
+.fchip.active { background: var(--islam); color: #fff; border-color: var(--islam); }
+
+.cr-section { padding: 0 18px 7px; flex-shrink: 0; }
+.cr-section-label {
+  font-family: var(--ff-mono);
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--bone-muted);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.cr-row {
+  background: var(--islam-soft);
+  border-radius: 9px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.cr-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--islam); flex-shrink: 0; }
+.cr-info { flex: 1; }
+.cr-name { font-family: var(--ff-body); font-size: 12.5px; font-weight: 600; color: var(--bone-fg); line-height: 1.2; }
+.cr-sub { font-family: var(--ff-mono); font-size: 7px; letter-spacing: 1px; color: var(--bone-muted); margin-top: 2px; }
+.cr-prog { height: 2px; background: rgba(31,93,76,0.14); border-radius: 1px; margin-top: 5px; overflow: hidden; }
+.cr-prog-fill { height: 100%; background: var(--islam); border-radius: 1px; }
+.cr-pct { font-family: var(--ff-mono); font-size: 8.5px; color: var(--islam); }
+
+.surah-list { flex: 1; overflow-y: auto; scrollbar-width: none; }
+.surah-list::-webkit-scrollbar { display: none; }
+.surah-row {
+  display: flex;
+  align-items: center;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--bone-line);
+  gap: 9px;
+}
+.surah-num { font-family: var(--ff-mono); font-size: 9.5px; color: var(--bone-muted); width: 15px; text-align: center; flex-shrink: 0; }
+.surah-info { flex: 1; }
+.surah-name { font-family: var(--ff-body); font-size: 12.5px; font-weight: 500; color: var(--bone-fg); line-height: 1.2; }
+.surah-sub { font-family: var(--ff-mono); font-size: 7px; letter-spacing: 1px; color: var(--bone-muted); margin-top: 1px; }
+.surah-arabic { font-family: 'Noto Nastaliq Urdu', 'Traditional Arabic', serif; font-size: 15px; color: var(--bone-muted); flex-shrink: 0; }
+.surah-row.active .surah-num { color: var(--islam); }
+.surah-row.active .surah-name { color: var(--islam); }
+.surah-row.active { background: rgba(31,93,76,0.04); }
+
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Divine Dialogue — Read Screen</h1>
+<p class="page-sub">UX Preview · Sprint 4 · Open in browser</p>
+
+<div class="phones-row">
+
+  <!-- ── QURAN READER ── -->
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="dynamic-island"></div>
+      <div class="status-bar">
+        <span class="sb-time">9:41</span>
+        <div class="sb-right">
+          <div class="sb-bars">
+            <span style="height:4px"></span><span style="height:6px"></span>
+            <span style="height:8px"></span><span style="height:10px"></span>
+          </div>
+          <span>⊘</span><span>▮▮▮</span>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-back">←</div>
+        <span class="nav-title">Al-Baqarah</span>
+        <div class="nav-badge badge-islam">156</div>
+      </div>
+      <div class="sub-nav">
+        <span class="sub-label">Ayah 5 of 286</span>
+        <div class="toc-icon"><span></span><span></span><span></span></div>
+      </div>
+      <div class="rule"></div>
+      <div class="reader-body">
+
+        <div class="verse-block">
+          <div class="arabic">ذَٰلِكَ ٱلۡكِتَٰبُ لَا رَيۡبَۛ فِيهِۛ هُدًى لِّلۡمُتَّقِينَ</div>
+          <div class="ayah-num-row"><div class="ayah-num">2</div></div>
+          <div class="translation">This is the Book about which there is no doubt, a guidance for those conscious of Allah</div>
+          <span class="translit-chip">Transliteration ▾</span>
+        </div>
+
+        <div class="verse-block">
+          <div class="arabic">ٱلَّذِينَ يُؤۡمِنُونَ بِٱلۡغَيۡبِ وَيُقِيمُونَ ٱلصَّلَوٰةَ</div>
+          <div class="ayah-num-row"><div class="ayah-num">3</div></div>
+          <div class="translation">Who believe in the unseen, establish prayer, and spend out of what We have provided for them</div>
+          <span class="translit-chip">Transliteration ▾</span>
+        </div>
+
+        <div class="verse-block">
+          <div class="arabic">وَٱلَّذِينَ يُؤۡمِنُونَ بِمَآ أُنزِلَ إِلَيۡكَ وَمَآ أُنزِلَ مِن قَبۡلِكَ</div>
+          <div class="ayah-num-row"><div class="ayah-num">4</div></div>
+          <div class="translation">And who believe in what has been revealed to you, and what was revealed before you</div>
+          <span class="translit-chip">Transliteration ▾</span>
+        </div>
+
+        <div class="verse-block">
+          <div class="arabic">أُوْلَٰٓئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمۡ وَأُوْلَٰٓئِكَ هُمُ ٱلۡمُفۡلِحُونَ</div>
+          <div class="ayah-num-row"><div class="ayah-num">5</div></div>
+          <div class="translation">Those are upon guidance from their Lord, and it is those who are the successful.</div>
+          <span class="translit-chip">Transliteration ▾</span>
+        </div>
+
+      </div>
+      <div class="bottom-bar">
+        <div class="bb-btn">←</div>
+        <div class="bb-btn">♡</div>
+        <div class="bb-btn" style="font-size:12px;">↗</div>
+        <div class="bb-btn">→</div>
+      </div>
+    </div>
+    <div class="phone-label">Quran Reader</div>
+  </div>
+
+  <!-- ── GGS READER ── -->
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="dynamic-island"></div>
+      <div class="status-bar">
+        <span class="sb-time">9:41</span>
+        <div class="sb-right">
+          <div class="sb-bars">
+            <span style="height:4px"></span><span style="height:6px"></span>
+            <span style="height:8px"></span><span style="height:10px"></span>
+          </div>
+          <span>⊘</span><span>▮▮▮</span>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-back">←</div>
+        <span class="nav-title" style="font-size:14.5px;">Guru Granth Sahib</span>
+        <div class="nav-badge badge-sikh">1</div>
+      </div>
+      <div class="sub-nav">
+        <span class="sub-label">Ang 1 of 1,430</span>
+        <div class="toc-icon"><span></span><span></span><span></span></div>
+      </div>
+      <div class="rule"></div>
+      <div class="reader-body">
+
+        <div class="section-head">Mool Mantar · Guru Nanak Dev Ji</div>
+        <div class="verse-block">
+          <div class="gurmukhi">
+            ੴ ਸਤਿ ਨਾਮੁ ਕਰਤਾ ਪੁਰਖੁ<br>
+            ਨਿਰਭਉ ਨਿਰਵੈਰੁ ਅਕਾਲ ਮੂਰਤਿ<br>
+            ਅਜੂਨੀ ਸੈਭੰ ਗੁਰ ਪ੍ਰਸਾਦਿ ॥
+          </div>
+          <div class="translation">One Universal Creator God. Truth Is The Name. Creative Being Personified. No Fear. No Hatred. Image Of The Undying. Beyond Birth. Self-Existent. By Guru's Grace.</div>
+          <span class="translit-chip" style="margin-top:9px; display:inline-flex;">Transliteration ▾</span>
+        </div>
+
+        <div class="section-head">Jap Ji Sahib · Pauree 1</div>
+        <div class="verse-block">
+          <div class="gurmukhi">
+            ਆਦਿ ਸਚੁ ਜੁਗਾਦਿ ਸਚੁ ॥<br>
+            ਹੈ ਭੀ ਸਚੁ ਨਾਨਕ ਹੋਸੀ ਭੀ ਸਚੁ ॥੧॥
+          </div>
+          <div class="translation">True In The Primal Beginning. True Throughout The Ages. True Here And Now. O Nanak, Forever And Ever True.</div>
+          <span class="translit-chip" style="margin-top:9px; display:inline-flex;">Transliteration ▾</span>
+        </div>
+
+        <div class="section-head">Jap Ji Sahib · Pauree 2</div>
+        <div class="verse-block">
+          <div class="gurmukhi">
+            ਸੋਚੈ ਸੋਚਿ ਨ ਹੋਵਈ ਜੇ ਸੋਚੀ ਲਖ ਵਾਰ ॥<br>
+            ਚੁਪੈ ਚੁਪ ਨ ਹੋਵਈ ਜੇ ਲਾਇ ਰਹਾ ਲਿਵ ਤਾਰ ॥੨॥
+          </div>
+          <div class="translation">By thinking, He cannot be reduced to thought, even by thinking hundreds of thousands of times.</div>
+          <span class="translit-chip" style="margin-top:9px; display:inline-flex;">Transliteration ▾</span>
+        </div>
+
+      </div>
+      <div class="bottom-bar">
+        <div class="bb-btn">←</div>
+        <div class="bb-btn">♡</div>
+        <div class="bb-btn" style="font-size:12px;">↗</div>
+        <div class="bb-btn">→</div>
+      </div>
+    </div>
+    <div class="phone-label">GGS Reader</div>
+  </div>
+
+  <!-- ── QURAN TOC SHEET ── -->
+  <div class="phone-wrap">
+    <div class="phone" style="overflow:hidden;">
+      <div class="dynamic-island"></div>
+
+      <!-- Peek of reader behind sheet -->
+      <div class="toc-peek">
+        <div style="font-family:var(--ff-display);font-style:italic;font-size:19px;color:var(--bone-fg);">Al-Baqarah</div>
+        <div style="font-family:var(--ff-mono);font-size:8px;color:var(--bone-muted);margin-top:3px;letter-spacing:1.5px;">AYAH 5 OF 286</div>
+        <div style="height:1px;background:var(--bone-line);margin:10px 0;"></div>
+        <div style="font-family:'Noto Nastaliq Urdu',serif;font-size:17px;color:var(--bone-fg);direction:rtl;text-align:right;line-height:2;">ٱلَّذِينَ يُؤۡمِنُونَ بِٱلۡغَيۡبِ</div>
+      </div>
+
+      <div class="toc-backdrop"></div>
+
+      <div class="toc-sheet">
+        <div class="sheet-handle"></div>
+        <div class="toc-meta">Index · 114 Surahs</div>
+        <div class="toc-title">Jump to a surah</div>
+        <div class="search-box">
+          <span style="color:var(--bone-muted);font-size:13px;">⌕</span>
+          <span class="search-placeholder">Surah name or 2:255...</span>
+        </div>
+        <div class="filter-chips">
+          <div class="fchip active">All</div>
+          <div class="fchip">Meccan · 86</div>
+          <div class="fchip">Medinan · 28</div>
+          <div class="fchip">★ Saved</div>
+        </div>
+        <div class="cr-section">
+          <div class="cr-section-label">Currently Reading</div>
+          <div class="cr-row">
+            <div class="cr-dot"></div>
+            <div class="cr-info">
+              <div class="cr-name">Al-Baqarah</div>
+              <div class="cr-sub">Ayah 5 of 286</div>
+              <div class="cr-prog"><div class="cr-prog-fill" style="width:62%"></div></div>
+            </div>
+            <div class="cr-pct">62%</div>
+          </div>
+        </div>
+        <div class="surah-list">
+          <div class="surah-row">
+            <span class="surah-num">1</span>
+            <div class="surah-info"><div class="surah-name">Al-Fatihah</div><div class="surah-sub">7 Ayat · Meccan</div></div>
+            <span class="surah-arabic">الفاتحة</span>
+          </div>
+          <div class="surah-row active">
+            <span class="surah-num">2</span>
+            <div class="surah-info"><div class="surah-name">Al-Baqarah</div><div class="surah-sub">286 Ayat · Medinan</div></div>
+            <span class="surah-arabic">البقرة</span>
+          </div>
+          <div class="surah-row">
+            <span class="surah-num">3</span>
+            <div class="surah-info"><div class="surah-name">Aali Imran</div><div class="surah-sub">200 Ayat · Medinan</div></div>
+            <span class="surah-arabic">آل عمران</span>
+          </div>
+          <div class="surah-row">
+            <span class="surah-num">4</span>
+            <div class="surah-info"><div class="surah-name">An-Nisa</div><div class="surah-sub">176 Ayat · Medinan</div></div>
+            <span class="surah-arabic">النساء</span>
+          </div>
+          <div class="surah-row">
+            <span class="surah-num">5</span>
+            <div class="surah-info"><div class="surah-name">Al-Maidah</div><div class="surah-sub">120 Ayat · Medinan</div></div>
+            <span class="surah-arabic">المائدة</span>
+          </div>
+          <div class="surah-row">
+            <span class="surah-num">6</span>
+            <div class="surah-info"><div class="surah-name">Al-Anam</div><div class="surah-sub">165 Ayat · Meccan</div></div>
+            <span class="surah-arabic">الأنعام</span>
+          </div>
+          <div class="surah-row">
+            <span class="surah-num">7</span>
+            <div class="surah-info"><div class="surah-name">Al-Araf</div><div class="surah-sub">206 Ayat · Meccan</div></div>
+            <span class="surah-arabic">الأعراف</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">Quran TOC Sheet</div>
+  </div>
+
+  <!-- ── BHAGAVAD GITA READER ── -->
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="dynamic-island"></div>
+      <div class="status-bar">
+        <span class="sb-time">9:41</span>
+        <div class="sb-right">
+          <div class="sb-bars">
+            <span style="height:4px"></span><span style="height:6px"></span>
+            <span style="height:8px"></span><span style="height:10px"></span>
+          </div>
+          <span>⊘</span><span>▮▮▮</span>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-back">←</div>
+        <span class="nav-title">Bhagavad Gita</span>
+        <div class="nav-badge badge-hindu">2:1</div>
+      </div>
+      <div class="sub-nav">
+        <span class="sub-label">Sānkhya Yoga · 72 verses</span>
+        <div class="toc-icon"><span></span><span></span><span></span></div>
+      </div>
+      <div class="rule"></div>
+      <div class="reader-body">
+
+        <div class="section-head" style="padding-top:10px;">Chapter 2 · Verse 1</div>
+        <div class="verse-block">
+          <div class="sanskrit">
+            संजय उवाच।<br>
+            तं तथा कृपयाविष्टं अश्रुपूर्णाकुलेक्षणम्।<br>
+            विषीदन्तमिदं वाक्यं उवाच मधुसूदनः ॥१॥
+          </div>
+          <div class="translation">Sanjaya said: Seeing Arjuna full of compassion, his mind depressed, his eyes full of tears, Madhusudana spoke the following words.</div>
+          <div class="chip-row" style="margin-top:9px;">
+            <span class="translit-chip">Transliteration ▾</span>
+            <span class="translit-chip">Word meanings ▾</span>
+          </div>
+        </div>
+
+        <div class="section-head">Chapter 2 · Verse 2</div>
+        <div class="verse-block">
+          <div class="sanskrit">
+            श्रीभगवानुवाच।<br>
+            कुतस्त्वा कश्मलमिदं विषमे समुपस्थितम्।<br>
+            अनार्यजुष्टमस्वर्ग्यं अकीर्तिकरमर्जुन ॥२॥
+          </div>
+          <div class="translation">The Supreme Lord said: My dear Arjuna, how has this delusion come upon you at this crucial moment? It is not befitting a man who knows the value of life.</div>
+          <div class="chip-row" style="margin-top:9px;">
+            <span class="translit-chip">Transliteration ▾</span>
+            <span class="translit-chip">Word meanings ▾</span>
+          </div>
+        </div>
+
+        <div class="section-head">Chapter 2 · Verse 3</div>
+        <div class="verse-block">
+          <div class="sanskrit">
+            क्लैब्यं मा स्म गमः पार्थ नैतत्त्वय्युपपद्यते।<br>
+            क्षुद्रं हृदयदौर्बल्यं त्यक्त्वोत्तिष्ठ परंतप ॥३॥
+          </div>
+          <div class="translation">O Partha, do not yield to this degrading impotence. Give up such faint-heartedness and arise, O chastiser of the enemy.</div>
+          <div class="chip-row" style="margin-top:9px;">
+            <span class="translit-chip">Transliteration ▾</span>
+            <span class="translit-chip">Word meanings ▾</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="bottom-bar">
+        <div class="bb-btn">←</div>
+        <div class="bb-btn">♡</div>
+        <div class="bb-btn" style="font-size:12px;">↗</div>
+        <div class="bb-btn">→</div>
+      </div>
+    </div>
+    <div class="phone-label">Bhagavad Gita Reader</div>
+  </div>
+
+</div><!-- /phones-row -->
+
+<!-- Design notes -->
+<div style="margin-top:48px; max-width:860px; width:100%; border-top:1px solid #272320; padding-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:10px 32px;">
+  <div style="font-family:'JetBrains Mono',monospace; font-size:8px; letter-spacing:2px; color:#3A3530; text-transform:uppercase; grid-column:1/-1; margin-bottom:8px;">Design decisions</div>
+  <p style="font-family:'Inter',sans-serif; font-size:11.5px; color:#4A4540; line-height:1.7;">Translation always visible — no tap needed. Transliteration collapsed by default to keep the screen clean. Original script is primary, always rendered large.</p>
+  <p style="font-family:'Inter',sans-serif; font-size:11.5px; color:#4A4540; line-height:1.7;">Accent color shifts per religion (green/navy/orange). TOC sheet shows progress bar + % inline. Active surah highlighted in accent. Section labels (raga/chapter) use mono all-caps muted.</p>
+</div>
+
+</body>
+</html>

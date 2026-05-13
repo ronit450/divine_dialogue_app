@@ -15,6 +15,7 @@ import '../../features/library/library_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/developers/developers_screen.dart';
+import '../../features/reader/reader_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
@@ -90,6 +91,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/developers',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const DevelopersScreen(),
+      ),
+      GoRoute(
+        path: '/read/:textId',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => ReaderScreen(
+          textId: state.pathParameters['textId']!,
+          initialChapter: state.extra is Map
+              ? (state.extra as Map)['chapter'] as int?
+              : null,
+        ),
       ),
       StatefulShellRoute.indexedStack(
         parentNavigatorKey: _rootKey,

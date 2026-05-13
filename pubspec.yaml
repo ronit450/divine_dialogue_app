@@ -70,4 +70,8 @@ flutter:
   assets:
     - assets/data/texts_catalog.json
     - assets/data/daily_verses.json
+    - assets/data/scripture/quran.json
+    - assets/data/scripture/bible.json
+    - assets/data/scripture/gita.json
+    - assets/data/scripture/ggs/
     - .env

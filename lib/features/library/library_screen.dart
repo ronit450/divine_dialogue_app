@@ -197,11 +197,7 @@ class _ReligionSectionState extends ConsumerState<_ReligionSection> {
                 padding: const EdgeInsets.only(top: 8, left: 12),
                 child: GestureDetector(
                   onTap: () {
-                    ref
-                        .read(religionProvider.notifier)
-                        .selectReligion(widget.religion);
-                    ref.read(religionProvider.notifier).selectText(text);
-                    context.go('/chat');
+                    context.push('/read/${text.id}');
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
