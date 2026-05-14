@@ -21,6 +21,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _consumePending());
+  }
+
+  void _consumePending() {
+    final pending = ref.read(pendingMessageProvider);
+    if (pending != null) {
+      ref.read(pendingMessageProvider.notifier).state = null;
+      ref.read(chatProvider.notifier).sendMessage(pending);
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+    }
   }
 
   @override
@@ -63,6 +73,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(pendingMessageProvider, (_, next) {
+      if (next != null) _consumePending();
+    });
+
     final chatState = ref.watch(chatProvider);
     final religionState = ref.watch(religionProvider);
     final religion = religionState.selectedReligion;

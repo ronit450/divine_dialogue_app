@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/models/chat_message.dart';
 import '../../data/texts_repository.dart';
 import '../../shared/widgets/religion_glyph.dart';
 
@@ -12,20 +15,98 @@ final _dailyVerseProvider = FutureProvider.autoDispose.family<DailyVerse, String
   (ref, religionId) => TextsRepository.instance.getDailyVerse(religionId),
 );
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _controller = TextEditingController();
+  final _scrollCtrl = ScrollController();
+  bool _chatStarted = false;
 
   static String _weekday(int d) =>
       const ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][d - 1];
   static String _month(int m) =>
-      const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][m - 1];
+      const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL',
+             'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][m - 1];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatState = ref.read(chatProvider);
+      if (chatState.session?.messages.isNotEmpty == true) {
+        if (mounted) setState(() => _chatStarted = true);
+      }
+      _consumePending();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _consumePending() {
+    final pending = ref.read(pendingMessageProvider);
+    if (pending != null) {
+      ref.read(pendingMessageProvider.notifier).state = null;
+      if (!_chatStarted && mounted) setState(() => _chatStarted = true);
+      ref.read(chatProvider.notifier).sendMessage(pending);
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+    }
+  }
+
+  void _send() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    _controller.clear();
+    if (!_chatStarted) setState(() => _chatStarted = true);
+    ref.read(chatProvider.notifier).sendMessage(text);
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+  }
+
+  void _scrollToBottom() {
+    if (_scrollCtrl.hasClients) {
+      _scrollCtrl.animateTo(
+        _scrollCtrl.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void _startNewChat() {
+    final rState = ref.read(religionProvider);
+    final religion = rState.selectedReligion;
+    final text = rState.selectedText;
+    if (religion != null && text != null) {
+      ref.read(chatProvider.notifier).startNewSession(
+        religionId: religion.id,
+        textId: text.id,
+        textTitle: text.title,
+      );
+    }
+    setState(() => _chatStarted = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<String?>(pendingMessageProvider, (_, next) {
+      if (next != null) _consumePending();
+    });
+
+    final chatState = ref.watch(chatProvider);
     final religionState = ref.watch(religionProvider);
     final religion = religionState.selectedReligion;
-    final accent = religion?.accentColor ?? AppColors.islamGreen;
-    final accentSoft = religion?.accentSoft ?? AppColors.islamGreenSoft;
+    final accent = religion != null
+        ? ReligionColors.accent(religion.id)
+        : AppColors.islamGreen;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
     final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
@@ -42,65 +123,1184 @@ class HomeScreen extends ConsumerWidget {
     final dateLabel =
         '${_weekday(now.weekday)} · ${now.day} ${_month(now.month)}';
 
+    final messages = chatState.session?.messages ?? [];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (messages.isNotEmpty || chatState.isStreaming || chatState.isTyping) {
+        _scrollToBottom();
+      }
+      if (chatState.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(chatState.error!,
+                style: GoogleFonts.inter(fontSize: 13)),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
     return Scaffold(
       backgroundColor: bg,
+      drawer: _ChatDrawer(
+        accent: accent,
+        isDark: isDark,
+        bg: bg,
+        fg: fg,
+        muted: muted,
+        line: line,
+        onNewChat: () {
+          Navigator.of(context).pop();
+          _startNewChat();
+        },
+        onSessionTap: (session) {
+          Navigator.of(context).pop();
+          ref.read(chatProvider.notifier).loadSession(session);
+          setState(() => _chatStarted = true);
+        },
+        onViewHistory: () {
+          Navigator.of(context).pop();
+          context.push('/history');
+        },
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(
+            _HomeTopBar(
               dateLabel: dateLabel,
               fg: fg,
               muted: muted,
+              line: line,
+              chatTitle: _chatStarted ? chatState.session?.title : null,
             ),
+            if (religion != null && !_chatStarted)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                child: _VerseCard(
+                  religionId: religion.id,
+                  accent: accent,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                ),
+              ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (religion != null)
-                      _VerseHero(
-                        religionId: religion.id,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: _chatStarted
+                    ? _MessagesList(
+                        key: const ValueKey('chat'),
+                        messages: messages,
+                        chatState: chatState,
+                        scrollCtrl: _scrollCtrl,
                         accent: accent,
-                        accentSoft: accentSoft,
                         isDark: isDark,
                         fg: fg,
                         muted: muted,
-                        onTap: () => context.go('/chat'),
-                      ),
-                    const SizedBox(height: 20),
-                    _GreetingSection(
-                      salutation: salutation,
-                      firstName: firstName,
-                      fg: fg,
-                      muted: muted,
-                    ),
-                    const SizedBox(height: 16),
-                    _MoodSection(
-                      accent: accent,
-                      fg: fg,
-                      muted: muted,
-                      line: line,
-                      onTap: (_) => context.go('/chat'),
-                    ),
-                    const SizedBox(height: 24),
-                    if (religion != null)
-                      _QuickStartSection(
-                        religionId: religion.id,
+                        line: line,
+                      )
+                    : _IdleContent(
+                        key: const ValueKey('idle'),
+                        religionId: religion?.id,
+                        salutation: salutation,
+                        firstName: firstName,
                         accent: accent,
                         fg: fg,
                         muted: muted,
-                        line: line,
-                        onTap: () => context.go('/chat'),
                       ),
-                    const SizedBox(height: 32),
-                    _BeginDialogueButton(
-                      accent: accent,
-                      fg: fg,
-                      bg: bg,
-                      onTap: () => context.go('/chat'),
+              ),
+            ),
+            if (chatState.pendingVerseContext != null)
+              _VerseBanner(
+                verseContext: chatState.pendingVerseContext!,
+                accent: accent,
+                fg: fg,
+                muted: muted,
+                line: line,
+                onDismiss: () =>
+                    ref.read(chatProvider.notifier).clearPendingVerse(),
+              ),
+            _InputBar(
+              controller: _controller,
+              accent: accent,
+              onSend: _send,
+              isDark: isDark,
+              fg: fg,
+              muted: muted,
+              line: line,
+              bg: bg,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Top bar ──────────────────────────────────────────────────────────────────
+
+class _HomeTopBar extends StatelessWidget {
+  const _HomeTopBar({
+    required this.dateLabel,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    this.chatTitle,
+  });
+
+  final String dateLabel;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final String? chatTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Scaffold.of(context).openDrawer(),
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: line, width: 0.8),
+              ),
+              child: Icon(Icons.menu_rounded, size: 16, color: fg),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: chatTitle != null
+                  ? Text(
+                      _toTitleCase(chatTitle!),
+                      style: GoogleFonts.cormorantGaramond(
+                        color: fg,
+                        fontSize: 16,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    )
+                  : Text(
+                      dateLabel,
+                      style: GoogleFonts.jetBrainsMono(
+                        color: muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 34),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Idle content ─────────────────────────────────────────────────────────────
+
+class _IdleContent extends StatelessWidget {
+  const _IdleContent({
+    super.key,
+    required this.religionId,
+    required this.salutation,
+    required this.firstName,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+  });
+
+  final String? religionId;
+  final String salutation;
+  final String firstName;
+  final Color accent;
+  final Color fg;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ReligionGlyph(
+              religionId: religionId ?? 'islam',
+              size: 36,
+              color: accent.withValues(alpha: 0.55),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '$salutation,',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.cormorantGaramond(
+                color: fg,
+                fontSize: 38,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
+              ),
+            ),
+            Text(
+              firstName,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.cormorantGaramond(
+                color: accent,
+                fontSize: 38,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'What would you like to ask today?',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: muted,
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Verse card ────────────────────────────────────────────────────────────────
+
+class _VerseCard extends ConsumerWidget {
+  const _VerseCard({
+    required this.religionId,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  final String religionId;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final verse = ref.watch(_dailyVerseProvider(religionId));
+    final cardBg = isDark ? accent.withValues(alpha: 0.12) : accent.withValues(alpha: 0.14);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: verse.when(
+        loading: () => SizedBox(
+          height: 72,
+          child: Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              valueColor: AlwaysStoppedAnimation(accent),
+            ),
+          ),
+        ),
+        error: (_, _) => Text(
+          'Verse unavailable',
+          style: GoogleFonts.inter(color: muted, fontSize: 13),
+        ),
+        data: (v) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ReligionGlyph(religionId: religionId, size: 12, color: accent),
+                const SizedBox(width: 6),
+                Text(
+                  'VERSE OF THE DAY',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: accent,
+                    fontSize: 9,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '"${v.text}"',
+              style: GoogleFonts.cormorantGaramond(
+                color: fg,
+                fontSize: 19,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${v.source.toUpperCase()} · ${v.ref}',
+              style: GoogleFonts.jetBrainsMono(
+                color: accent,
+                fontSize: 9,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Messages list ─────────────────────────────────────────────────────────────
+
+class _MessagesList extends StatelessWidget {
+  const _MessagesList({
+    super.key,
+    required this.messages,
+    required this.chatState,
+    required this.scrollCtrl,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+  });
+
+  final List<ChatMessage> messages;
+  final ChatState chatState;
+  final ScrollController scrollCtrl;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) {
+    if (messages.isEmpty && !chatState.isTyping && !chatState.isStreaming) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.08),
+                  border: Border.all(color: accent.withValues(alpha: 0.2)),
+                ),
+                child:
+                    Icon(Icons.auto_stories_rounded, color: accent, size: 24),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Starting a new chat…',
+                style: GoogleFonts.cormorantGaramond(
+                  color: fg,
+                  fontSize: 18,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final itemCount = messages.length +
+        (chatState.isTyping || chatState.isStreaming ? 1 : 0);
+
+    return ListView.builder(
+      controller: scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      itemCount: itemCount,
+      itemBuilder: (context, i) {
+        if (i == messages.length) {
+          if (chatState.isStreaming) {
+            return _StreamingBubble(
+              text: chatState.streamingText,
+              accent: accent,
+              isDark: isDark,
+              fg: fg,
+              line: line,
+            );
+          }
+          return _TypingIndicator(accent: accent, isDark: isDark, line: line);
+        }
+        return _MessageBubble(
+          message: messages[i],
+          accent: accent,
+          isDark: isDark,
+          fg: fg,
+          line: line,
+        );
+      },
+    );
+  }
+}
+
+// ── Chat drawer ───────────────────────────────────────────────────────────────
+
+class _ChatDrawer extends ConsumerStatefulWidget {
+  const _ChatDrawer({
+    required this.accent,
+    required this.isDark,
+    required this.bg,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onNewChat,
+    required this.onSessionTap,
+    required this.onViewHistory,
+  });
+
+  final Color accent;
+  final bool isDark;
+  final Color bg;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final VoidCallback onNewChat;
+  final ValueChanged<ChatSession> onSessionTap;
+  final VoidCallback onViewHistory;
+
+  @override
+  ConsumerState<_ChatDrawer> createState() => _ChatDrawerState();
+}
+
+class _ChatDrawerState extends ConsumerState<_ChatDrawer> {
+  String _query = '';
+
+  Map<String, List<ChatSession>> _group(List<ChatSession> sessions) {
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final weekAgo = today.subtract(const Duration(days: 7));
+
+    final groups = <String, List<ChatSession>>{
+      'TODAY': [],
+      'YESTERDAY': [],
+      'EARLIER THIS WEEK': [],
+      'OLDER': [],
+    };
+
+    for (final s in sessions) {
+      final d = DateUtils.dateOnly(s.updatedAt);
+      if (d == today) {
+        groups['TODAY']!.add(s);
+      } else if (d == yesterday) {
+        groups['YESTERDAY']!.add(s);
+      } else if (d.isAfter(weekAgo)) {
+        groups['EARLIER THIS WEEK']!.add(s);
+      } else {
+        groups['OLDER']!.add(s);
+      }
+    }
+    return groups;
+  }
+
+  String _timeLabel(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    final d = DateUtils.dateOnly(dt);
+    if (d == today) {
+      final h = dt.hour;
+      final m = dt.minute.toString().padLeft(2, '0');
+      final period = h >= 12 ? 'PM' : 'AM';
+      final displayH = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      return '$displayH:$m $period';
+    }
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (d.isAfter(today.subtract(const Duration(days: 7)))) {
+      return days[dt.weekday - 1];
+    }
+    return '${months[dt.month - 1]} ${dt.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final historyState = ref.watch(historyProvider);
+    final sessions = _query.isEmpty
+        ? historyState.sessions
+        : historyState.sessions
+            .where((s) =>
+                s.title.toLowerCase().contains(_query.toLowerCase()))
+            .toList();
+    final groups = _group(sessions);
+    final fieldBg = widget.isDark
+        ? AppColors.nightSurface
+        : widget.line.withValues(alpha: 0.10);
+
+    return Drawer(
+      width: 300,
+      backgroundColor: widget.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              child: Row(
+                children: [
+                  ReligionGlyph(
+                    religionId: 'sikhism',
+                    size: 18,
+                    color: widget.fg.withValues(alpha: 0.45),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Divine Chat',
+                    style: GoogleFonts.cormorantGaramond(
+                      color: widget.fg,
+                      fontSize: 18,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: widget.line, width: 0.8),
+                      ),
+                      child: Icon(Icons.close_rounded,
+                          size: 14, color: widget.muted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // New chat button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: GestureDetector(
+                onTap: widget.onNewChat,
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: widget.accent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.add_rounded,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        'New chat',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Search
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Container(
+                height: 38,
+                decoration: BoxDecoration(
+                  color: fieldBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    Icon(Icons.search_rounded,
+                        size: 16, color: widget.muted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        onChanged: (v) => setState(() => _query = v),
+                        style: GoogleFonts.inter(
+                            color: widget.fg, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Search chats…',
+                          hintStyle: GoogleFonts.inter(
+                              color: widget.muted, fontSize: 13),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            // Sessions list
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 16),
+                children: [
+                  for (final groupKey in groups.keys)
+                    if (groups[groupKey]!.isNotEmpty) ...[
+                      Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(20, 8, 20, 6),
+                        child: Text(
+                          groupKey,
+                          style: GoogleFonts.jetBrainsMono(
+                            color: widget.muted,
+                            fontSize: 9,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      for (final session in groups[groupKey]!)
+                        _SessionTile(
+                          session: session,
+                          timeLabel: _timeLabel(session.updatedAt),
+                          fg: widget.fg,
+                          muted: widget.muted,
+                          line: widget.line,
+                          accent: widget.accent,
+                          onTap: () => widget.onSessionTap(session),
+                        ),
+                    ],
+                  if (sessions.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                      child: Text(
+                        _query.isEmpty
+                            ? 'No conversations yet'
+                            : 'No results found',
+                        style: GoogleFonts.inter(
+                            color: widget.muted, fontSize: 13),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _toTitleCase(String text) => text.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      return w[0].toUpperCase() + (w.length > 1 ? w.substring(1) : '');
+    }).join(' ');
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({
+    required this.session,
+    required this.timeLabel,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final ChatSession session;
+  final String timeLabel;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        child: Row(
+          children: [
+            Icon(Icons.chat_bubble_outline_rounded, size: 15, color: muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _toTitleCase(session.title),
+                    style: GoogleFonts.cormorantGaramond(
+                      color: fg,
+                      fontSize: 16,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$timeLabel · ${session.messages.length} msg',
+                    style: GoogleFonts.inter(
+                      color: muted,
+                      fontSize: 11,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Verse banner ──────────────────────────────────────────────────────────────
+
+class _VerseBanner extends StatelessWidget {
+  const _VerseBanner({
+    required this.verseContext,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onDismiss,
+  });
+
+  final VerseContext verseContext;
+  final Color accent;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = verseContext.translation.length > 70
+        ? '${verseContext.translation.substring(0, 70)}…'
+        : verseContext.translation;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.menu_book_rounded, size: 13, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  verseContext.reference.toUpperCase(),
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 8,
+                    color: accent,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  preview,
+                  style: GoogleFonts.inter(
+                      fontSize: 11, color: muted, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Icon(Icons.close_rounded, size: 15, color: muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Input bar ─────────────────────────────────────────────────────────────────
+
+class _InputBar extends StatefulWidget {
+  const _InputBar({
+    required this.controller,
+    required this.accent,
+    required this.onSend,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.bg,
+  });
+
+  final TextEditingController controller;
+  final Color accent;
+  final VoidCallback onSend;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final Color bg;
+
+  @override
+  State<_InputBar> createState() => _InputBarState();
+}
+
+class _InputBarState extends State<_InputBar> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) setState(() => _hasText = hasText);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
+      decoration: BoxDecoration(color: widget.bg),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: fieldBg,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: widget.line.withValues(alpha: 0.5)),
+              ),
+              child: TextField(
+                controller: widget.controller,
+                style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
+                maxLines: 4,
+                minLines: 1,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => widget.onSend(),
+                cursorColor: widget.accent,
+                decoration: InputDecoration(
+                  hintText: 'Type a message…',
+                  hintStyle:
+                      GoogleFonts.inter(color: widget.muted, fontSize: 14),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _hasText ? widget.onSend : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _hasText
+                    ? widget.accent
+                    : widget.accent.withValues(alpha: 0.25),
+                boxShadow: _hasText
+                    ? [
+                        BoxShadow(
+                          color: widget.accent.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: const Icon(Icons.arrow_upward_rounded,
+                  color: Colors.white, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Message bubble ────────────────────────────────────────────────────────────
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({
+    required this.message,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.line,
+  });
+
+  final ChatMessage message;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color line;
+
+  void _showCitationsSheet(BuildContext context) {
+    final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _CitationsSheet(
+        citations: message.citations,
+        accent: accent,
+        isDark: isDark,
+        fg: fg,
+        muted: muted,
+        line: line,
+        sheetBg: sheetBg,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.isUser;
+    final hasCitations = !isUser && message.citations.isNotEmpty;
+    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment:
+            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isUser) ...[
+                Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.only(right: 8, bottom: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accent.withValues(alpha: 0.12),
+                    border: Border.all(
+                        color: accent.withValues(alpha: 0.25), width: 0.5),
+                  ),
+                  child: Icon(Icons.auto_stories_rounded,
+                      color: accent, size: 13),
+                ),
+              ],
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(
+                      maxWidth:
+                          MediaQuery.of(context).size.width * 0.75),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isUser ? accent : aiBg,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isUser ? 16 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    ),
+                    border:
+                        isUser ? null : Border.all(color: line, width: 1),
+                  ),
+                  child: Text(
+                    message.text,
+                    style: GoogleFonts.inter(
+                      color: isUser ? Colors.white : fg,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (hasCitations) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 36),
+              child: GestureDetector(
+                onTap: () => _showCitationsSheet(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.menu_book_rounded, size: 12, color: accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${message.citations.length} source${message.citations.length > 1 ? 's' : ''}',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: accent,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(Icons.open_in_new_rounded, size: 9, color: accent),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Citations sheet ───────────────────────────────────────────────────────────
+
+class _CitationsSheet extends StatelessWidget {
+  const _CitationsSheet({
+    required this.citations,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.sheetBg,
+  });
+
+  final List<Citation> citations;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final Color sheetBg;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.62,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: sheetBg,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 4),
+                decoration: BoxDecoration(
+                  color: line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accent.withValues(alpha: 0.1),
+                    ),
+                    child: Icon(Icons.menu_book_rounded,
+                        color: accent, size: 14),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'SCRIPTURE REFERENCES',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: accent,
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${citations.length} passage${citations.length > 1 ? 's' : ''}',
+                    style:
+                        GoogleFonts.inter(color: muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Divider(color: line, height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: citations.length,
+                itemBuilder: (_, i) => _CitationCard(
+                  citation: citations[i],
+                  accent: accent,
+                  isDark: isDark,
+                  fg: fg,
+                  line: line,
                 ),
               ),
             ),
@@ -111,32 +1311,93 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// ── Top bar ────────────────────────────────────────────────────────────────────
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.dateLabel,
+class _CitationCard extends StatelessWidget {
+  const _CitationCard({
+    required this.citation,
+    required this.accent,
+    required this.isDark,
     required this.fg,
-    required this.muted,
+    required this.line,
   });
 
-  final String dateLabel;
+  final Citation citation;
+  final Color accent;
+  final bool isDark;
   final Color fg;
-  final Color muted;
+  final Color line;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      child: Row(
+    final cardBg =
+        isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final hasOriginal = citation.originalText.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: accent.withValues(alpha: 0.3), width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                citation.reference.toUpperCase(),
+                style: GoogleFonts.jetBrainsMono(
+                  color: accent,
+                  fontSize: 9,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (hasOriginal) ...[
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: citation.isRtl
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
+              child: Text(
+                citation.originalText,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: citation.isRtl ? 19 : 15,
+                  height: citation.isRtl ? 2.2 : 1.7,
+                  fontWeight: FontWeight.w400,
+                  fontFamily: citation.isRtl ? null : 'serif',
+                ),
+                textAlign: citation.isRtl
+                    ? TextAlign.right
+                    : TextAlign.left,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Divider(color: line, height: 1),
+          ],
+          const SizedBox(height: 10),
           Text(
-            dateLabel,
-            style: GoogleFonts.jetBrainsMono(
-              color: muted,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1.0,
+            '"${citation.translation}"',
+            style: GoogleFonts.cormorantGaramond(
+              color: fg.withValues(alpha: 0.8),
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              height: 1.55,
             ),
           ),
         ],
@@ -145,386 +1406,207 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Verse hero ─────────────────────────────────────────────────────────────────
+// ── Streaming bubble ──────────────────────────────────────────────────────────
 
-class _VerseHero extends ConsumerWidget {
-  const _VerseHero({
-    required this.religionId,
+class _StreamingBubble extends StatelessWidget {
+  const _StreamingBubble({
+    required this.text,
     required this.accent,
-    required this.accentSoft,
     required this.isDark,
     required this.fg,
-    required this.muted,
-    required this.onTap,
+    required this.line,
   });
 
-  final String religionId;
+  final String text;
   final Color accent;
-  final Color accentSoft;
   final bool isDark;
   final Color fg;
-  final Color muted;
-  final VoidCallback onTap;
+  final Color line;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final verse = ref.watch(_dailyVerseProvider(religionId));
-    final cardBg = isDark ? accent.withValues(alpha: 0.10) : accentSoft;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: verse.when(
-          loading: () => SizedBox(
-            height: 80,
-            child: Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                valueColor: AlwaysStoppedAnimation(accent),
+  Widget build(BuildContext context) {
+    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(right: 8, bottom: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: accent.withValues(alpha: 0.12),
+              border: Border.all(
+                  color: accent.withValues(alpha: 0.25), width: 0.5),
+            ),
+            child:
+                Icon(Icons.auto_stories_rounded, color: accent, size: 13),
+          ),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: aiBg,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border.all(color: line, width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: GoogleFonts.inter(
+                          color: fg, fontSize: 14, height: 1.5),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  _BlinkingCursor(color: accent),
+                ],
               ),
             ),
           ),
-          error: (_, _) => Text(
-            'Verse unavailable',
-            style: GoogleFonts.inter(color: muted, fontSize: 13),
-          ),
-          data: (v) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  ReligionGlyph(religionId: religionId, size: 13, color: accent),
-                  const SizedBox(width: 6),
-                  Text(
-                    'VERSE OF THE DAY',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: accent,
-                      fontSize: 9,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                '"${v.text}"',
-                style: GoogleFonts.cormorantGaramond(
-                  color: fg,
-                  fontSize: 22,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                  height: 1.4,
-                  letterSpacing: -0.2,
-                ),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${v.source.toUpperCase()} · ${v.ref}',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: accent,
-                        fontSize: 10,
-                        letterSpacing: 0.8,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Discuss',
-                        style: GoogleFonts.inter(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(Icons.arrow_forward_rounded, color: accent, size: 12),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor({required this.color});
+  final Color color;
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _ctrl,
+      child: Container(
+        width: 2,
+        height: 14,
+        margin: const EdgeInsets.only(bottom: 2),
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(1),
         ),
       ),
     );
   }
 }
 
-// ── Greeting section ───────────────────────────────────────────────────────────
-
-class _GreetingSection extends StatelessWidget {
-  const _GreetingSection({
-    required this.salutation,
-    required this.firstName,
-    required this.fg,
-    required this.muted,
-  });
-
-  final String salutation;
-  final String firstName;
-  final Color fg;
-  final Color muted;
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator(
+      {required this.accent, required this.isDark, required this.line});
+  final Color accent;
+  final bool isDark;
+  final Color line;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$salutation, $firstName.',
-          style: GoogleFonts.cormorantGaramond(
-            color: fg,
-            fontSize: 36,
-            fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w500,
-            height: 1.1,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'BEGIN YOUR JOURNEY',
-          style: GoogleFonts.jetBrainsMono(
-            color: muted,
-            fontSize: 10,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
 
-// ── Mood section ───────────────────────────────────────────────────────────────
-
-class _MoodSection extends StatelessWidget {
-  const _MoodSection({
-    required this.accent,
-    required this.fg,
-    required this.muted,
-    required this.line,
-    required this.onTap,
-  });
-
-  final Color accent;
-  final Color fg;
-  final Color muted;
-  final Color line;
-  final ValueChanged<String> onTap;
-
-  static const _moods = ['Grateful', 'Restless', 'Searching', 'Heavy'];
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'HOW IS YOUR HEART TODAY?',
-          style: GoogleFonts.jetBrainsMono(
-            color: muted,
-            fontSize: 10,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _moods.map((mood) {
-            return GestureDetector(
-              onTap: () => onTap(mood),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: line),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      mood,
-                      style: GoogleFonts.inter(
-                        color: fg,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
-}
 
-// ── Quick-start prompts ────────────────────────────────────────────────────────
-
-class _QuickStartSection extends StatelessWidget {
-  const _QuickStartSection({
-    required this.religionId,
-    required this.accent,
-    required this.fg,
-    required this.muted,
-    required this.line,
-    required this.onTap,
-  });
-
-  final String religionId;
-  final Color accent;
-  final Color fg;
-  final Color muted;
-  final Color line;
-  final VoidCallback onTap;
-
-  static const _prompts = <String, List<String>>{
-    'islam': [
-      'What are the five pillars of Islam?',
-      'How do I strengthen my Salah?',
-      'What does the Quran say about patience?',
-    ],
-    'hinduism': [
-      'What is the meaning of dharma?',
-      'How do I practice karma yoga?',
-      'What is the path to moksha?',
-    ],
-    'sikhism': [
-      'What is the Mool Mantar?',
-      'How do I practice Seva in daily life?',
-      'What does Gurbani say about the soul?',
-    ],
-    'christianity': [
-      'What is the greatest commandment?',
-      'How do I practice forgiveness?',
-      'What does Jesus say about love?',
-    ],
-  };
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final questions = _prompts[religionId] ?? _prompts['islam']!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'EXPLORE',
-          style: GoogleFonts.jetBrainsMono(
-            color: muted,
-            fontSize: 10,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
+    final aiBg =
+        widget.isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final dotColor =
+        widget.isDark ? AppColors.nightMuted : AppColors.boneMuted;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(right: 8, bottom: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.accent.withValues(alpha: 0.12),
+            ),
+            child: Icon(Icons.auto_stories_rounded,
+                color: widget.accent, size: 13),
           ),
-        ),
-        const SizedBox(height: 10),
-        ...questions.map(
-          (q) => GestureDetector(
-            onTap: onTap,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: line, width: 0.5)),
-              ),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: aiBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: widget.line, width: 1),
+            ),
+            child: FadeTransition(
+              opacity: _anim,
               child: Row(
-                children: [
-                  Icon(Icons.arrow_forward_ios_rounded, size: 10, color: accent),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      q,
-                      style: GoogleFonts.inter(
-                        color: fg,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        height: 1.3,
-                      ),
-                    ),
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  3,
+                  (i) => Container(
+                    width: 6,
+                    height: 6,
+                    margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle, color: dotColor),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Begin Dialogue button ──────────────────────────────────────────────────────
-
-class _BeginDialogueButton extends StatelessWidget {
-  const _BeginDialogueButton({
-    required this.accent,
-    required this.fg,
-    required this.bg,
-    required this.onTap,
-  });
-
-  final Color accent;
-  final Color fg;
-  final Color bg;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: accent,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Begin Dialogue',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

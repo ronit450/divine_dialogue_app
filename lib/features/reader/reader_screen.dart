@@ -367,7 +367,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       religionId: _meta!.religionId,
       textId: widget.textId,
     );
-    context.go('/chat');
+    context.go('/home');
   }
 
   void _copyVerse(ScriptureVerse verse) {

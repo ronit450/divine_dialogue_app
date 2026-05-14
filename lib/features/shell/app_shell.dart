@@ -13,9 +13,8 @@ class AppShell extends ConsumerStatefulWidget {
 
   static const _tabs = [
     _Tab(label: 'Home'),
-    _Tab(label: 'Dialogue'),
     _Tab(label: 'Read'),
-    _Tab(label: 'Settings'),
+    _Tab(label: 'Self'),
   ];
 
   @override
@@ -186,20 +185,7 @@ class _IconPainter extends CustomPainter {
           ..close();
         canvas.drawPath(path, p);
 
-      case 1: // Dialogue
-        final outer = Path()
-          ..moveTo(w * 0.15, h * 0.25)
-          ..lineTo(w * 0.85, h * 0.25)
-          ..arcToPoint(Offset(w * 0.85, h * 0.65), radius: Radius.circular(w * 0.1))
-          ..lineTo(w * 0.5, h * 0.65)
-          ..lineTo(w * 0.35, h * 0.88)
-          ..lineTo(w * 0.35, h * 0.65)
-          ..lineTo(w * 0.15, h * 0.65)
-          ..arcToPoint(Offset(w * 0.15, h * 0.25), radius: Radius.circular(w * 0.1))
-          ..close();
-        canvas.drawPath(outer, p);
-
-      case 2: // Read (open book)
+      case 1: // Read (open book)
         canvas.drawLine(Offset(w * 0.5, h * 0.15), Offset(w * 0.5, h * 0.85), p);
         final left = Path()
           ..moveTo(w * 0.15, h * 0.2)
@@ -216,7 +202,7 @@ class _IconPainter extends CustomPainter {
           ..close();
         canvas.drawPath(right, p);
 
-      case 3: // Self
+      case 2: // Self
         canvas.drawCircle(Offset(w * 0.5, h * 0.35), w * 0.18, p);
         final curve = Path()
           ..moveTo(w * 0.15, h * 0.9)

@@ -10,7 +10,6 @@ import '../../features/auth/sign_in_screen.dart';
 import '../../features/profile_setup/profile_setup_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/home/home_screen.dart';
-import '../../features/chat/chat_screen.dart';
 import '../../features/library/library_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -112,14 +111,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/home',
                 builder: (context, state) => const HomeScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/chat',
-                builder: (context, state) => const ChatScreen(),
               ),
             ],
           ),

@@ -6,6 +6,8 @@ import '../data/divine_api.dart';
 import 'history_provider.dart';
 import 'religion_provider.dart';
 
+final pendingMessageProvider = StateProvider<String?>((ref) => null);
+
 class ChatState {
   const ChatState({
     this.session,

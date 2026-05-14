@@ -122,15 +122,6 @@ class ProfileScreen extends ConsumerWidget {
                           ),
                           Divider(height: 1, color: line),
                           _ActionRow(
-                            icon: Icons.menu_book_rounded,
-                            label: 'Change texts',
-                            fg: fg,
-                            muted: muted,
-                            line: line,
-                            onTap: () => context.go('/onboarding/text'),
-                          ),
-                          Divider(height: 1, color: line),
-                          _ActionRow(
                             icon: Icons.logout_rounded,
                             label: 'Sign out',
                             fg: Colors.red.shade400,
@@ -171,6 +162,35 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    if (religion != null && religion.texts.isNotEmpty) ...[
+                      _SectionLabel(label: 'TEXTS', muted: muted),
+                      const SizedBox(height: 10),
+                      _SurfaceCard(
+                        surface: surface,
+                        line: line,
+                        isDark: isDark,
+                        child: _ActionRow(
+                          icon: Icons.menu_book_rounded,
+                          label: religionState.selectedText?.title ?? 'Choose texts',
+                          fg: fg,
+                          muted: muted,
+                          line: line,
+                          onTap: () => _showTextPicker(
+                            context: context,
+                            ref: ref,
+                            religion: religion,
+                            currentId: religionState.selectedText?.id,
+                            accent: accent,
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            surface: surface,
+                            isDark: isDark,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     _SectionLabel(label: 'APPEARANCE', muted: muted),
                     const SizedBox(height: 10),
                     _SurfaceCard(
@@ -440,6 +460,172 @@ class _InfoRow extends StatelessWidget {
           Text(value, style: GoogleFonts.inter(color: muted, fontSize: 14)),
         ],
       ),
+    );
+  }
+}
+
+void _showTextPicker({
+  required BuildContext context,
+  required WidgetRef ref,
+  required ReligionModel religion,
+  required String? currentId,
+  required Color accent,
+  required Color fg,
+  required Color muted,
+  required Color line,
+  required Color surface,
+  required bool isDark,
+}) {
+  final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: bg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        String? selectedId = currentId;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: muted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Choose text',
+                    style: GoogleFonts.cormorantGaramond(
+                      color: fg, fontSize: 24,
+                      fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: line),
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Column(
+                      children: religion.texts.asMap().entries.map((e) {
+                        final t = e.value;
+                        final isSel = t.id == selectedId;
+                        final isLast = e.key == religion.texts.length - 1;
+                        return StatefulBuilder(
+                          builder: (_, setItem) => Column(
+                            children: [
+                              _TextRow(
+                                text: t,
+                                accent: accent,
+                                isSelected: isSel,
+                                showDivider: !isLast,
+                                line: line,
+                                fg: fg,
+                                muted: muted,
+                                onTap: () {
+                                  selectedId = t.id;
+                                  setState(() {});
+                                  ref.read(religionProvider.notifier).selectText(t);
+                                  Navigator.of(ctx).pop();
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _TextRow extends StatelessWidget {
+  const _TextRow({
+    required this.text,
+    required this.accent,
+    required this.isSelected,
+    required this.showDivider,
+    required this.line,
+    required this.fg,
+    required this.muted,
+    required this.onTap,
+  });
+
+  final SacredTextModel text;
+  final Color accent;
+  final bool isSelected;
+  final bool showDivider;
+  final Color line;
+  final Color fg;
+  final Color muted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            color: Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.menu_book_rounded, color: isSelected ? accent : muted, size: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        text.title,
+                        style: GoogleFonts.inter(
+                          color: isSelected ? accent : fg,
+                          fontSize: 14,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                      if (text.description.isNotEmpty)
+                        Text(
+                          text.description,
+                          style: GoogleFonts.inter(color: muted, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Icon(Icons.check_circle_rounded, color: accent, size: 18),
+              ],
+            ),
+          ),
+        ),
+        if (showDivider) Divider(height: 1, color: line),
+      ],
     );
   }
 }

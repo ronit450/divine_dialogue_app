@@ -44,6 +44,18 @@ class LibraryScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
+                        GestureDetector(
+                          onTap: () => context.go('/home'),
+                          child: Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: line),
+                            ),
+                            child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
