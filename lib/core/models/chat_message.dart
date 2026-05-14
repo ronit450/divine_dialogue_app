@@ -125,3 +125,18 @@ class ChatSession {
     return DateTime.now();
   }
 }
+
+class VerseContext {
+  const VerseContext({
+    required this.reference,
+    required this.originalText,
+    required this.translation,
+    required this.religionId,
+    required this.textId,
+  });
+  final String reference;
+  final String originalText;
+  final String translation;
+  final String religionId;
+  final String textId;
+}

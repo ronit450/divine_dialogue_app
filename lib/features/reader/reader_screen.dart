@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/scripture.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
+import '../../providers/chat_provider.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
 class ReaderScreen extends ConsumerStatefulWidget {
@@ -304,6 +306,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             muted: muted,
                             showTranslation: _showTranslation,
                             showTranslit: _showTranslit,
+                            onAskAI: () => _askAboutVerse(_verses[i]),
                           ),
                         ),
             ),
@@ -342,6 +345,28 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         onTap: onTap,
         child: SizedBox(width: 48, height: 48, child: Icon(icon, size: 17, color: color)),
       );
+
+  String _verseReference(ScriptureVerse verse) => switch (_meta!.type) {
+    ScriptureTextType.quran    => 'Quran $_currentChapter:${verse.number}',
+    ScriptureTextType.bible    => '${_meta!.title} $_currentChapter:${verse.number}',
+    ScriptureTextType.gita     => 'Bhagavad Gita $_currentChapter.${verse.number}',
+    ScriptureTextType.ggs      => 'Guru Granth Sahib Ang $_currentChapter',
+    ScriptureTextType.dasam    => 'Dasam Granth Page $_currentChapter',
+    ScriptureTextType.bgv      => 'Bhai Gurdas Vaaran $_currentChapter',
+    ScriptureTextType.hadith   => '${_meta!.title} — ${verse.groupLabel ?? 'Chapter $_currentChapter'}',
+    ScriptureTextType.ramayana => 'Valmiki Ramayana — Sarga $_currentChapter, Verse ${verse.number}',
+  };
+
+  void _askAboutVerse(ScriptureVerse verse) {
+    ref.read(chatProvider.notifier).startSessionFromVerse(
+      reference: _verseReference(verse),
+      originalText: verse.original ?? verse.transliteration ?? '',
+      translation: verse.translation,
+      religionId: _meta!.religionId,
+      textId: widget.textId,
+    );
+    context.go('/chat');
+  }
 }
 
 class _VerseCard extends StatelessWidget {
@@ -353,6 +378,7 @@ class _VerseCard extends StatelessWidget {
     required this.muted,
     required this.showTranslation,
     required this.showTranslit,
+    this.onAskAI,
   });
 
   final ScriptureVerse verse;
@@ -362,18 +388,55 @@ class _VerseCard extends StatelessWidget {
   final Color muted;
   final bool showTranslation;
   final bool showTranslit;
+  final VoidCallback? onAskAI;
 
   @override
-  Widget build(BuildContext context) => switch (type) {
-        ScriptureTextType.quran  => _quranCard(),
-        ScriptureTextType.ggs    => _sikhCard(),
-        ScriptureTextType.dasam  => _sikhCard(),
-        ScriptureTextType.bgv    => _sikhCard(),
-        ScriptureTextType.gita    => _gitaCard(),
-        ScriptureTextType.bible   => _bibleCard(),
-        ScriptureTextType.hadith  => _hadithCard(),
-        ScriptureTextType.ramayana => _gitaCard(),
-      };
+  Widget build(BuildContext context) {
+    final card = switch (type) {
+      ScriptureTextType.quran    => _quranCard(),
+      ScriptureTextType.ggs      => _sikhCard(),
+      ScriptureTextType.dasam    => _sikhCard(),
+      ScriptureTextType.bgv      => _sikhCard(),
+      ScriptureTextType.gita     => _gitaCard(),
+      ScriptureTextType.bible    => _bibleCard(),
+      ScriptureTextType.hadith   => _hadithCard(),
+      ScriptureTextType.ramayana => _gitaCard(),
+    };
+    if (onAskAI == null) return card;
+    return Stack(
+      children: [
+        card,
+        Positioned(
+          top: 10,
+          right: 0,
+          child: GestureDetector(
+            onTap: onAskAI,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: accent.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded, size: 10, color: accent),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Ask',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 8, color: accent, letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _hadithCard() {
     final meta = verse.wordMeanings ?? '';

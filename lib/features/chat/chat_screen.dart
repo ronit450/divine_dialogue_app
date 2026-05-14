@@ -21,24 +21,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _ensureSession();
-  }
-
-  void _ensureSession() {
-    final chatState = ref.read(chatProvider);
-    if (chatState.session != null) return;
-
-    final religionState = ref.read(religionProvider);
-    final religion = religionState.selectedReligion;
-    final text = religionState.selectedText;
-
-    if (religion != null && text != null) {
-      ref.read(chatProvider.notifier).startNewSession(
-        religionId: religion.id,
-        textId: text.id,
-        textTitle: text.title,
-      );
-    }
   }
 
   @override
@@ -95,7 +77,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messages = chatState.session?.messages ?? [];
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (messages.isNotEmpty) _scrollToBottom();
+      if (messages.isNotEmpty || chatState.isStreaming || chatState.isTyping) _scrollToBottom();
       if (chatState.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -117,6 +99,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         line: line,
         bg: bg,
         onNewChat: _startNewChat,
+        onHistory: () => context.push('/history'),
       ),
       body: Column(
         children: [
@@ -126,9 +109,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 : ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    itemCount: messages.length + (chatState.isTyping ? 1 : 0),
+                    itemCount: messages.length +
+                        (chatState.isTyping || chatState.isStreaming ? 1 : 0),
                     itemBuilder: (context, i) {
                       if (i == messages.length) {
+                        if (chatState.isStreaming) {
+                          return _StreamingBubble(
+                            text: chatState.streamingText,
+                            accent: accent,
+                            isDark: isDark,
+                            fg: fg,
+                            line: line,
+                          );
+                        }
                         return _TypingIndicator(accent: accent, isDark: isDark, line: line);
                       }
                       return _MessageBubble(
@@ -141,6 +134,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
+          if (chatState.pendingVerseContext != null)
+            _VerseBanner(
+              verseContext: chatState.pendingVerseContext!,
+              accent: accent,
+              fg: fg,
+              muted: muted,
+              line: line,
+              onDismiss: () => ref.read(chatProvider.notifier).clearPendingVerse(),
+            ),
           _InputBar(
             controller: _controller,
             accent: accent,
@@ -166,6 +168,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.line,
     required this.bg,
     required this.onNewChat,
+    required this.onHistory,
   });
 
   final String title;
@@ -175,6 +178,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Color line;
   final Color bg;
   final VoidCallback onNewChat;
+  final VoidCallback onHistory;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -214,8 +218,14 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           IconButton(
+            icon: Icon(Icons.history_rounded, color: fg.withValues(alpha: 0.6), size: 20),
+            onPressed: onHistory,
+            tooltip: 'History',
+          ),
+          IconButton(
             icon: Icon(Icons.add_comment_outlined, color: accent, size: 20),
             onPressed: onNewChat,
+            tooltip: 'New chat',
           ),
         ],
       ),
@@ -583,6 +593,187 @@ class _CitationCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VerseBanner extends StatelessWidget {
+  const _VerseBanner({
+    required this.verseContext,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onDismiss,
+  });
+
+  final VerseContext verseContext;
+  final Color accent;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = verseContext.translation.length > 70
+        ? '${verseContext.translation.substring(0, 70)}…'
+        : verseContext.translation;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.menu_book_rounded, size: 13, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  verseContext.reference.toUpperCase(),
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 8, color: accent, letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  preview,
+                  style: GoogleFonts.inter(fontSize: 11, color: muted, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Icon(Icons.close_rounded, size: 15, color: muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreamingBubble extends StatelessWidget {
+  const _StreamingBubble({
+    required this.text,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.line,
+  });
+
+  final String text;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) {
+    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(right: 8, bottom: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: accent.withValues(alpha: 0.12),
+              border: Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
+            ),
+            child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
+          ),
+          Flexible(
+            child: Container(
+              constraints:
+                  BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: aiBg,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border.all(color: line, width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  _BlinkingCursor(color: accent),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor({required this.color});
+  final Color color;
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _ctrl,
+      child: Container(
+        width: 2,
+        height: 14,
+        margin: const EdgeInsets.only(bottom: 2),
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(1),
+        ),
       ),
     );
   }
