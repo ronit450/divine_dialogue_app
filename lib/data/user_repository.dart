@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 import 'package:divine_dialogue/core/models/user_model.dart';
 
 class UserRepository {
@@ -26,6 +28,24 @@ class UserRepository {
     return _usersCollection.doc(uid).snapshots().map((doc) {
       if (!doc.exists) return null;
       return UserModel.fromFirestore(doc);
+    });
+  }
+
+  static const _uuid = Uuid();
+
+  Future<void> saveVerse({
+    required String textId,
+    required String reference,
+    required String text,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final id = _uuid.v4();
+    await _usersCollection.doc(uid).collection('savedVerses').doc(id).set({
+      'textId': textId,
+      'reference': reference,
+      'text': text,
+      'savedAt': FieldValue.serverTimestamp(),
     });
   }
 }

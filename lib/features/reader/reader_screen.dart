@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
 import '../../providers/chat_provider.dart';
+import '../../data/user_repository.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
 class ReaderScreen extends ConsumerStatefulWidget {
@@ -306,7 +308,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             muted: muted,
                             showTranslation: _showTranslation,
                             showTranslit: _showTranslit,
-                            onAskAI: () => _askAboutVerse(_verses[i]),
+                            onLongPress: () => _showVerseOptions(_verses[i]),
                           ),
                         ),
             ),
@@ -367,6 +369,129 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
     context.go('/chat');
   }
+
+  void _copyVerse(ScriptureVerse verse) {
+    final parts = <String>[];
+    if (verse.original != null) parts.add(verse.original!);
+    if (verse.transliteration != null) parts.add(verse.transliteration!);
+    parts.add(verse.translation);
+    parts.add('— ${_verseReference(verse)}');
+    Clipboard.setData(ClipboardData(text: parts.join('\n\n')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Verse copied', style: GoogleFonts.inter(fontSize: 13)),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _saveVerse(ScriptureVerse verse) async {
+    await UserRepository.instance.saveVerse(
+      textId: widget.textId,
+      reference: _verseReference(verse),
+      text: verse.translation,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Verse saved', style: GoogleFonts.inter(fontSize: 13)),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showVerseOptions(ScriptureVerse verse) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.nightBg : Colors.white;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final accent = _meta != null ? ReligionColors.accent(_meta!.religionId) : AppColors.islamGreen;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: muted.withValues(alpha: 0.15)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  _verseReference(verse),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.jetBrainsMono(
+                      color: muted, fontSize: 10, letterSpacing: 1.2),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  verse.translation,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      color: fg.withValues(alpha: 0.7),
+                      fontSize: 12,
+                      height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Divider(height: 1, color: muted.withValues(alpha: 0.15)),
+              _DialogOption(
+                icon: Icons.auto_awesome_rounded,
+                label: 'Ask AI about this verse',
+                color: accent,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _askAboutVerse(verse);
+                },
+              ),
+              Divider(height: 1, color: muted.withValues(alpha: 0.15)),
+              _DialogOption(
+                icon: Icons.copy_rounded,
+                label: 'Copy verse',
+                color: fg,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _copyVerse(verse);
+                },
+              ),
+              Divider(height: 1, color: muted.withValues(alpha: 0.15)),
+              _DialogOption(
+                icon: Icons.bookmark_border_rounded,
+                label: 'Save verse',
+                color: fg,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _saveVerse(verse);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _VerseCard extends StatelessWidget {
@@ -378,7 +503,7 @@ class _VerseCard extends StatelessWidget {
     required this.muted,
     required this.showTranslation,
     required this.showTranslit,
-    this.onAskAI,
+    this.onLongPress,
   });
 
   final ScriptureVerse verse;
@@ -388,7 +513,7 @@ class _VerseCard extends StatelessWidget {
   final Color muted;
   final bool showTranslation;
   final bool showTranslit;
-  final VoidCallback? onAskAI;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -402,39 +527,10 @@ class _VerseCard extends StatelessWidget {
       ScriptureTextType.hadith   => _hadithCard(),
       ScriptureTextType.ramayana => _gitaCard(),
     };
-    if (onAskAI == null) return card;
-    return Stack(
-      children: [
-        card,
-        Positioned(
-          top: 10,
-          right: 0,
-          child: GestureDetector(
-            onTap: onAskAI,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: accent.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.auto_awesome_rounded, size: 10, color: accent),
-                  const SizedBox(width: 3),
-                  Text(
-                    'Ask',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 8, color: accent, letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+    return GestureDetector(
+      onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
+      child: card,
     );
   }
 
@@ -619,4 +715,38 @@ class _VerseCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+class _DialogOption extends StatelessWidget {
+  const _DialogOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 14),
+            Text(label,
+                style: GoogleFonts.inter(
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
 }
