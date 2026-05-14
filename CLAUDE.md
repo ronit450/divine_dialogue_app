@@ -30,23 +30,28 @@ Feature-first folder layout:
 ```
 lib/
   core/
-    models/          # ReligionModel, SacredTextModel, UserModel, ChatMessage
-    router/          # app_router.dart — GoRouter + redirect logic
-    theme/           # AppColors, AppTheme
+    models/
+      scripture.dart        # ScriptureVerse, ScriptureChapter, ScriptureTextMeta, ScriptureTextType enum
+    router/                 # app_router.dart — GoRouter + redirect logic
+    theme/                  # AppColors, AppTheme
   data/
-    texts_repository.dart   # loads assets/data/texts_catalog.json
-    user_repository.dart    # Firestore CRUD for users/{uid}
-    chat_repository.dart    # in-memory chat (Sprint 3: Firestore)
+    texts_repository.dart      # loads assets/data/texts_catalog.json
+    scripture_repository.dart  # loads all scripture assets (chunked + direct)
+    user_repository.dart       # Firestore CRUD for users/{uid}
+    chat_repository.dart       # in-memory chat (Sprint 3: Firestore)
   features/
     splash/
-    onboarding/      # intro (3 slides), religion select, text select
-    auth/            # sign_in_screen.dart
-    profile_setup/   # name + age collection after first sign-in
+    onboarding/             # intro (3 slides), religion select, text select
+    auth/                   # sign_in_screen.dart
+    profile_setup/          # name + age collection after first sign-in
     home/
     chat/
-    library/
+    library/                # library_screen.dart — religion-filtered text cards (no chips, shows selected religion only)
+    reader/
+      reader_screen.dart    # scripture reader with per-type verse cards
+      toc_sheet.dart        # showTocSheet (chapter list) + showPagedTocSheet (numeric jump)
     history/
-    profile/         # "Self" tab — settings + tradition switcher
+    profile/                # "Self" tab — settings + tradition switcher
   providers/
     religion_provider.dart  # signInDone, onboardingDone, selectedReligion, selectedText
     auth_provider.dart      # Firebase Auth (Google, Apple, email, guest)
@@ -164,6 +169,108 @@ Security rules: `firestore.rules` at project root — `request.auth.uid == userI
 
 ---
 
+## Reader Feature
+
+### Scripture texts & asset layout
+
+All scripture assets live in `assets/data/scripture/`. Two loading strategies:
+
+**Direct load** (small files, all chapters in memory):
+| Text ID | Asset file | Loader |
+|---|---|---|
+| `quran` | `scripture/quran.json` | `_loadQuran()` |
+| `bhagavad_gita` | `scripture/gita.json` | `_loadGita()` |
+| `bible_nrsv` | `scripture/bible.json` | `_loadBible()` |
+
+**Chunked load** (large files, loaded on-demand per page/chapter):
+| Text ID | Asset dir | Chunk size | Loader method |
+|---|---|---|---|
+| `guru_granth_sahib` | `scripture/ggs/` | 100 angs | `loadGgsAng(int)` |
+| `dasam_granth` | `scripture/dasam/` | 100 pages | `loadDasamPage(int)` |
+| `bhai_gurdas_vaaran` | `scripture/bgv/` | 10 vaars | `loadBgvVaar(int)` |
+| `valmiki_ramayana` | `scripture/valmiki_ramayana/` | 50 sargas | `loadRamayanaSarga(int)` |
+| `bukhari` | `scripture/bukhari/` | 10 chapters | `loadHadithChapter(textId, int)` |
+| `muslim` | `scripture/muslim/` | 10 chapters | `loadHadithChapter(textId, int)` |
+| `abu_dawud` | `scripture/abu_dawud/` | 10 chapters | `loadHadithChapter(textId, int)` |
+| `tirmidhi` | `scripture/tirmidhi/` | 10 chapters | `loadHadithChapter(textId, int)` |
+| `nasai` | `scripture/nasai/` | 10 chapters | `loadHadithChapter(textId, int)` |
+| `ibn_majah` | `scripture/ibn_majah/` | 10 chapters | `loadHadithChapter(textId, int)` |
+
+Chunked files named `{prefix}_{idx}.json` (idx zero-padded to 3 digits, e.g. `ggs_000.json`).
+
+### ScriptureTextType enum
+
+```dart
+enum ScriptureTextType { quran, bible, gita, ggs, dasam, bgv, hadith, ramayana }
+```
+
+`hasTransliteration` → true for: `quran, ggs, dasam, bgv, gita, ramayana`
+
+### Paged vs chapter-based texts
+
+**Chapter-based** (all chapters loaded upfront, TOC list sheet):
+- `quran`, `bhagavad_gita`, `bible_nrsv`
+- Uses `showTocSheet(chapters: [...])` — scrollable chapter list with search
+
+**Paged** (on-demand load, numeric jump sheet):
+- `guru_granth_sahib`, `dasam_granth`, `bhai_gurdas_vaaran`, `valmiki_ramayana`, all hadith
+- Uses `showPagedTocSheet(meta: ScriptureTextMeta)` — text input + quick-jump chips
+- `_isPagedType` getter in reader_screen controls which flow is used
+
+### Reader screen state
+
+```dart
+bool _showTranslation = true;
+bool _showTranslit = true;
+```
+
+Reading options exposed via `Icons.tune_rounded` → `showModalBottomSheet` with `StatefulBuilder`.
+Transliteration toggle only shown when `_meta?.hasTransliteration == true`.
+
+### Verse card dispatch
+
+```dart
+ScriptureTextType.quran    => _quranCard()   // Arabic RTL + transliteration + translation
+ScriptureTextType.ggs      => _sikhCard()    // Gurmukhi + Roman + translation
+ScriptureTextType.dasam    => _sikhCard()
+ScriptureTextType.bgv      => _sikhCard()
+ScriptureTextType.gita     => _gitaCard()    // Sanskrit + transliteration + word meanings + translation
+ScriptureTextType.bible    => _bibleCard()   // translation only
+ScriptureTextType.hadith   => _hadithCard()  // chapter header + Arabic + translation + narrator/grade
+ScriptureTextType.ramayana => _gitaCard()    // same layout as gita
+```
+
+### Hadith verse encoding
+
+`ScriptureVerse.wordMeanings` stores `'$narrator\n$grade'` — parsed in `_hadithCard()`.
+
+### Bottom navigation bar (reader)
+
+Three buttons: `←` prev / `format_list_bulleted` TOC / `→` next.
+TOC button is center, always visible regardless of scripture type.
+
+### TOC sheet overflow fix
+
+`_PagedTocSheet` uses `SingleChildScrollView` + `maxHeight` constraint instead of fixed height.
+Keyboard inset handled via `SizedBox(height: MediaQuery.of(context).viewInsets.bottom)` at column bottom.
+
+### Library screen
+
+`ConsumerWidget` (not stateful). Shows only selected religion's texts — no filter chips.
+Active religion = `selectedReligion ?? religions.first`.
+
+### Data source files
+
+Raw data lives at `../../data/jsons/` (relative to project root, i.e. two levels up from `codes/divine_dialogue/`):
+- `islam/quran-complete.json` — flat list with `{number_of_surah, name, name_translations, verses[{number, text, translation_en, transliteration}]}`
+- `islam/bukhari.json` etc — hadith collections
+- `hindu/bhagavad-gita-complete.json` — `{verses:[{id, chapter, verse, sanskrit, transliteration, word_meanings, english}]}`
+- `hindu/valmiki-ramayana-complete.json` — ramayana source
+
+When replacing a scripture asset, write a Python conversion script to transform raw → app format, then output directly to `assets/data/scripture/`.
+
+---
+
 ## Sprint Status
 
 | Sprint | Focus | Status |
@@ -171,8 +278,9 @@ Security rules: `firestore.rules` at project root — `request.auth.uid == userI
 | 0 | Firestore foundation (UserModel, UserRepository, rules) | ✅ Done |
 | 1 | User identity (UserProvider, ProfileSetupScreen, routing) | ✅ Done |
 | 2 | Home screen redesign (greeting, input card, topics, verse) | ✅ Done |
+| 2.5 | Reader feature (all 10 texts, chunked loading, TOC, reading options) | ✅ Done |
 | 3 | Claude AI integration (Cloud Functions proxy, streaming, citations) | 🔜 Next |
-| 4 | Library & text explorer | ⬜ Planned |
+| 4 | Library & text explorer (deep links, search across texts) | ⬜ Planned |
 | 5 | Conversation history & persistence | ⬜ Planned |
 | 6 | Daily engagement (verse of day, streaks, push notifications) | ⬜ Planned |
 | 7 | Cross-tradition comparison | ⬜ Planned |

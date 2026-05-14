@@ -31,7 +31,7 @@ class HistoryScreen extends ConsumerWidget {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => context.go('/home'),
+                      onTap: () => context.pop(),
                       child: Container(
                         width: 36,
                         height: 36,
