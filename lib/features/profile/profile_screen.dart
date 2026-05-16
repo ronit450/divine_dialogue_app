@@ -156,7 +156,7 @@ class ProfileScreen extends ConsumerWidget {
                             showDivider: !isLast,
                             line: line,
                             fg: fg,
-                            onTap: () => ref.read(religionProvider.notifier).selectReligion(r),
+                            onTap: () => ref.read(religionProvider.notifier).changeReligion(r),
                           );
                         }).toList(),
                       ),
@@ -171,15 +171,13 @@ class ProfileScreen extends ConsumerWidget {
                         isDark: isDark,
                         child: _ActionRow(
                           icon: Icons.menu_book_rounded,
-                          label: religionState.selectedText?.title ?? 'Choose texts',
+                          label: 'Choose texts',
                           fg: fg,
                           muted: muted,
                           line: line,
                           onTap: () => _showTextPicker(
                             context: context,
-                            ref: ref,
                             religion: religion,
-                            currentId: religionState.selectedText?.id,
                             accent: accent,
                             fg: fg,
                             muted: muted,
@@ -466,9 +464,7 @@ class _InfoRow extends StatelessWidget {
 
 void _showTextPicker({
   required BuildContext context,
-  required WidgetRef ref,
   required ReligionModel religion,
-  required String? currentId,
   required Color accent,
   required Color fg,
   required Color muted,
@@ -480,151 +476,155 @@ void _showTextPicker({
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: bg,
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) {
-        String? selectedId = currentId;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: muted.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Choose text',
-                    style: GoogleFonts.cormorantGaramond(
-                      color: fg, fontSize: 24,
-                      fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: line),
-                    ),
-                    clipBehavior: Clip.hardEdge,
-                    child: Column(
-                      children: religion.texts.asMap().entries.map((e) {
-                        final t = e.value;
-                        final isSel = t.id == selectedId;
-                        final isLast = e.key == religion.texts.length - 1;
-                        return StatefulBuilder(
-                          builder: (_, setItem) => Column(
-                            children: [
-                              _TextRow(
-                                text: t,
-                                accent: accent,
-                                isSelected: isSel,
-                                showDivider: !isLast,
-                                line: line,
-                                fg: fg,
-                                muted: muted,
-                                onTap: () {
-                                  selectedId = t.id;
-                                  setState(() {});
-                                  ref.read(religionProvider.notifier).selectText(t);
-                                  Navigator.of(ctx).pop();
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom + 24),
-          ],
-        );
-      },
+    builder: (ctx) => _TextPickerSheet(
+      religion: religion,
+      accent: accent,
+      fg: fg,
+      muted: muted,
+      line: line,
+      surface: surface,
+      bg: bg,
     ),
   );
 }
 
-class _TextRow extends StatelessWidget {
-  const _TextRow({
-    required this.text,
+class _TextPickerSheet extends ConsumerWidget {
+  const _TextPickerSheet({
+    required this.religion,
     required this.accent,
-    required this.isSelected,
-    required this.showDivider,
-    required this.line,
     required this.fg,
     required this.muted,
-    required this.onTap,
+    required this.line,
+    required this.surface,
+    required this.bg,
   });
 
-  final SacredTextModel text;
-  final Color accent;
-  final bool isSelected;
-  final bool showDivider;
-  final Color line;
-  final Color fg;
-  final Color muted;
-  final VoidCallback onTap;
+  final ReligionModel religion;
+  final Color accent, fg, muted, line, surface, bg;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(religionProvider).selectedTexts;
+    final selectedIds = selected.map((t) => t.id).toSet();
+
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            color: Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(Icons.menu_book_rounded, color: isSelected ? accent : muted, size: 18),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        text.title,
-                        style: GoogleFonts.inter(
-                          color: isSelected ? accent : fg,
-                          fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                      ),
-                      if (text.description.isNotEmpty)
-                        Text(
-                          text.description,
-                          style: GoogleFonts.inter(color: muted, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
+        const SizedBox(height: 12),
+        Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+            color: muted.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Choose texts',
+                  style: GoogleFonts.cormorantGaramond(
+                    color: fg, fontSize: 24,
+                    fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
                   ),
                 ),
-                if (isSelected)
-                  Icon(Icons.check_circle_rounded, color: accent, size: 18),
-              ],
+              ),
+              GestureDetector(
+                onTap: () async {
+                  await ref.read(religionProvider.notifier).saveSelectedTexts();
+                  if (context.mounted) Navigator.of(context).pop();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Done',
+                    style: GoogleFonts.inter(
+                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: line),
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: Column(
+                  children: religion.texts.asMap().entries.map((e) {
+                    final t = e.value;
+                    final isSel = selectedIds.contains(t.id);
+                    final isLast = e.key == religion.texts.length - 1;
+                    return Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () => ref.read(religionProvider.notifier).toggleText(t),
+                          child: Container(
+                            color: Colors.transparent,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            child: Row(
+                              children: [
+                                Icon(Icons.menu_book_rounded, color: isSel ? accent : muted, size: 18),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        t.title,
+                                        style: GoogleFonts.inter(
+                                          color: isSel ? accent : fg,
+                                          fontSize: 14,
+                                          fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                                        ),
+                                      ),
+                                      if (t.description.isNotEmpty)
+                                        Text(
+                                          t.description,
+                                          style: GoogleFonts.inter(color: muted, fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  isSel ? Icons.check_circle_rounded : Icons.circle_outlined,
+                                  color: isSel ? accent : muted.withValues(alpha: 0.4),
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (!isLast) Divider(height: 1, color: line),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
             ),
           ),
         ),
-        if (showDivider) Divider(height: 1, color: line),
+        SizedBox(height: MediaQuery.of(context).viewInsets.bottom + 24),
       ],
     );
   }

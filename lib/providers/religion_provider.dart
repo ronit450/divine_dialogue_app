@@ -55,21 +55,31 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
     final prefs = await SharedPreferences.getInstance();
     final savedReligionId = prefs.getString('selected_religion');
     final savedTextId = prefs.getString('selected_text');
+    final savedTextIdsStr = prefs.getString('selected_texts');
     final onboardingDone = prefs.getBool('onboarding_done') ?? false;
     final signInDone = prefs.getBool('sign_in_done') ?? false;
 
     ReligionModel? selectedReligion;
     SacredTextModel? selectedText;
+    List<SacredTextModel> selectedTexts = [];
 
     if (savedReligionId != null) {
       try {
         selectedReligion = religions.firstWhere((r) => r.id == savedReligionId);
-        if (savedTextId != null) {
-          selectedText = selectedReligion.texts.firstWhere(
-            (t) => t.id == savedTextId,
-            orElse: () => selectedReligion!.texts.first,
-          );
+        if (savedTextIdsStr != null && savedTextIdsStr.isNotEmpty) {
+          for (final id in savedTextIdsStr.split(',')) {
+            try {
+              selectedTexts.add(selectedReligion.texts.firstWhere((t) => t.id == id));
+            } catch (_) {}
+          }
+        } else if (savedTextId != null) {
+          try {
+            final t = selectedReligion.texts.firstWhere((t) => t.id == savedTextId);
+            selectedTexts = [t];
+            selectedText = t;
+          } catch (_) {}
         }
+        selectedText ??= selectedTexts.firstOrNull;
       } catch (_) {
         selectedReligion = null;
       }
@@ -79,6 +89,7 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
       religions: religions,
       selectedReligion: selectedReligion,
       selectedText: selectedText,
+      selectedTexts: selectedTexts,
       isLoaded: true,
       signInDone: signInDone,
       onboardingDone: onboardingDone,
@@ -87,6 +98,28 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
 
   void selectReligion(ReligionModel religion) {
     state = state.copyWith(selectedReligion: religion, selectedTexts: []);
+  }
+
+  Future<void> changeReligion(ReligionModel religion) async {
+    state = state.copyWith(selectedReligion: religion, selectedTexts: []);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_religion', religion.id);
+    await prefs.remove('selected_texts');
+    await prefs.remove('selected_text');
+  }
+
+  Future<void> saveSelectedTexts() async {
+    final texts = state.selectedTexts;
+    final prefs = await SharedPreferences.getInstance();
+    if (texts.isEmpty) {
+      await prefs.remove('selected_texts');
+      await prefs.remove('selected_text');
+      return;
+    }
+    await prefs.setString('selected_texts', texts.map((t) => t.id).join(','));
+    final primary = texts.first;
+    state = state.copyWith(selectedText: primary, selectedTexts: texts);
+    await prefs.setString('selected_text', primary.id);
   }
 
   void toggleText(SacredTextModel text) {

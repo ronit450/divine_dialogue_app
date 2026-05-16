@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models/scripture.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
@@ -56,7 +57,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       _meta!.type == ScriptureTextType.hadith ||
       _meta!.type == ScriptureTextType.ramayana;
 
+  bool get _isSikhType =>
+      _meta!.type == ScriptureTextType.ggs ||
+      _meta!.type == ScriptureTextType.dasam ||
+      _meta!.type == ScriptureTextType.bgv;
+
   Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstOpen = !prefs.containsKey('reader_pos_${widget.textId}');
+
     final saved = ref.read(scripturePositionProvider).getPosition(widget.textId);
     _currentChapter = widget.initialChapter ?? saved.$1;
     try {
@@ -71,7 +80,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       if (mounted) setState(() => _error = e.toString());
       return;
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+      if (isFirstOpen && !_isSikhType) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openToc();
+        });
+      }
+    }
   }
 
   Future<List<ScriptureVerse>> _loadPagedVerses(int page) {

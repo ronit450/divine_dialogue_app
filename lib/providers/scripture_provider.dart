@@ -8,6 +8,8 @@ class ScripturePositions {
   ScripturePositions copyWith(String textId, int chapter, int verse) =>
       ScripturePositions(positions: {...positions, textId: (chapter, verse)});
 
+  bool hasPosition(String textId) => positions.containsKey(textId);
+
   (int chapter, int verse) getPosition(String textId) =>
       positions[textId] ?? (1, 1);
 }
