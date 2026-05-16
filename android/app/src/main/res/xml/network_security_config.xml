@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Block all cleartext (HTTP) by default -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- TODO: Remove this block once backend serves HTTPS (see backend.md) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">divince-chat-ai-alb-1631994646.us-east-1.elb.amazonaws.com</domain>
+    </domain-config>
+    <!-- Allow user-installed CAs in debug for Charles/mitmproxy -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

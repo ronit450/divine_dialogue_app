@@ -25,7 +25,11 @@ class ChatRepository {
   Future<void> saveSession(ChatSession session) async {
     final uid = _uid;
     if (uid == null) return;
-    await _conv(uid).doc(session.id).set(session.toJson());
+    // Firestore doc limit is 1MB — cap at 200 messages to stay well within it
+    final toSave = session.messages.length > 200
+        ? session.copyWith(messages: session.messages.sublist(session.messages.length - 200))
+        : session;
+    await _conv(uid).doc(session.id).set(toSave.toJson());
   }
 
   Future<void> deleteSession(String sessionId) async {
