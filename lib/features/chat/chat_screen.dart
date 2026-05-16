@@ -77,6 +77,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (next != null) _consumePending();
     });
 
+    ref.listen<ChatState>(chatProvider, (prev, next) {
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!, style: GoogleFonts.inter(fontSize: 13)),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      final prevCount = prev?.session?.messages.length ?? 0;
+      final nextCount = next.session?.messages.length ?? 0;
+      if (nextCount > prevCount || next.isStreaming || next.isTyping) {
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+    });
+
     final chatState = ref.watch(chatProvider);
     final religionState = ref.watch(religionProvider);
     final religion = religionState.selectedReligion;
@@ -89,19 +106,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
 
     final messages = chatState.session?.messages ?? [];
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (messages.isNotEmpty || chatState.isStreaming || chatState.isTyping) _scrollToBottom();
-      if (chatState.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(chatState.error!, style: GoogleFonts.inter(fontSize: 13)),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
 
     return Scaffold(
       backgroundColor: bg,

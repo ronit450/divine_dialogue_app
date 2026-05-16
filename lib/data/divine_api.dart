@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import '../core/models/chat_message.dart';
@@ -23,6 +24,14 @@ class DivineApi {
   final _client = http.Client();
   String get _baseUrl => dotenv.env['BASE_URL'] ?? '';
 
+  Future<Map<String, String>> _headers() async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Stream<ApiStreamEvent> chatStream({
     required String question,
     required String religion,
@@ -38,15 +47,20 @@ class DivineApi {
   }) async* {
     final http.Response response;
     try {
-      response = await _client.post(
-        Uri.parse('$_baseUrl/chat'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'question': question,
-          'religion': religion,
-          'context': context,
-        }),
-      );
+      response = await _client
+          .post(
+            Uri.parse('$_baseUrl/chat'),
+            headers: await _headers(),
+            body: jsonEncode({
+              'question': question,
+              'religion': religion,
+              'context': context,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw Exception('Request timed out'),
+          );
     } catch (e) {
       throw Exception('Network error: $e');
     }

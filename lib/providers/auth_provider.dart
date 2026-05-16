@@ -29,7 +29,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signInAsGuest() async {
-    state = const AuthState(isGuest: true);
+    final result = await FirebaseAuth.instance.signInAnonymously();
+    state = AuthState(uid: result.user?.uid, isGuest: true);
   }
 
   Future<void> signOut() async {

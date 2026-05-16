@@ -119,7 +119,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(clearPendingVerse: true);
   }
 
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(String rawText) async {
+    final text = rawText.length > 2000 ? rawText.substring(0, 2000) : rawText;
     if (state.session == null) {
       final rState = _ref.read(religionProvider);
       final religion = rState.selectedReligion;
@@ -172,10 +173,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
       List<Citation> citations = [];
       List<dynamic> newContext = [];
 
+      // Cap context window to last 20 items to bound memory + API payload size
+      final ctx = state.conversationContext;
+      final cappedContext = ctx.length > 20 ? ctx.sublist(ctx.length - 20) : ctx;
+
       await for (final event in DivineApi.instance.chatStream(
         question: apiQuestion,
         religion: current.religionId,
-        context: state.conversationContext,
+        context: cappedContext,
       )) {
         if (event is ApiStreamChunk) {
           textBuffer.write(event.text);
