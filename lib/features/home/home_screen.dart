@@ -22,10 +22,12 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _scrollCtrl = ScrollController();
   bool _chatStarted = false;
+  GoRouter? _router;
+  String _lastRoute = '/home';
 
   static String _weekday(int d) =>
       const ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][d - 1];
@@ -36,7 +38,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _router = GoRouter.of(context);
+      _router!.routerDelegate.addListener(_onRouteChanged);
       final chatState = ref.read(chatProvider);
       if (chatState.session?.messages.isNotEmpty == true) {
         if (mounted) setState(() => _chatStarted = true);
@@ -47,9 +52,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _router?.routerDelegate.removeListener(_onRouteChanged);
     _controller.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkAutoReset();
+  }
+
+  void _onRouteChanged() {
+    if (!mounted) return;
+    final path = _router?.routerDelegate.currentConfiguration.uri.path ?? '';
+    if (path == '/home' && _lastRoute != '/home') _checkAutoReset();
+    if (path.isNotEmpty) _lastRoute = path;
+  }
+
+  void _checkAutoReset() {
+    final session = ref.read(chatProvider).session;
+    if (session == null || session.messages.isEmpty) return;
+    if (DateTime.now().difference(session.updatedAt).inSeconds >= 30) {
+      _startNewChat();
+    }
   }
 
   void _consumePending() {
@@ -384,7 +411,7 @@ class _IdleContent extends StatelessWidget {
 
 // ── Verse card ────────────────────────────────────────────────────────────────
 
-class _VerseCard extends ConsumerWidget {
+class _VerseCard extends ConsumerStatefulWidget {
   const _VerseCard({
     required this.religionId,
     required this.accent,
@@ -400,72 +427,161 @@ class _VerseCard extends ConsumerWidget {
   final Color muted;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final verse = ref.watch(_dailyVerseProvider(religionId));
-    final cardBg = isDark ? accent.withValues(alpha: 0.12) : accent.withValues(alpha: 0.14);
+  ConsumerState<_VerseCard> createState() => _VerseCardState();
+}
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: cardBg,
+class _VerseCardState extends ConsumerState<_VerseCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _glare;
+
+  @override
+  void initState() {
+    super.initState();
+    _glare = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _scheduleGlare(const Duration(seconds: 2));
+  }
+
+  void _scheduleGlare(Duration delay) {
+    Future.delayed(delay, () {
+      if (!mounted) return;
+      _glare.forward(from: 0).then((_) => _scheduleGlare(const Duration(seconds: 6)));
+    });
+  }
+
+  @override
+  void dispose() {
+    _glare.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final verse = ref.watch(_dailyVerseProvider(widget.religionId));
+    final cardBg = widget.isDark
+        ? widget.accent.withValues(alpha: 0.20)
+        : widget.accent.withValues(alpha: 0.22);
+    final v = verse.valueOrNull;
+
+    return GestureDetector(
+      onTap: v?.textId != null
+          ? () => context.push(
+                '/read/${v!.textId}',
+                extra: v.navChapter != null ? {'chapter': v.navChapter} : null,
+              )
+          : null,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-      ),
-      child: verse.when(
-        loading: () => SizedBox(
-          height: 72,
-          child: Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              valueColor: AlwaysStoppedAnimation(accent),
-            ),
-          ),
-        ),
-        error: (_, _) => Text(
-          'Verse unavailable',
-          style: GoogleFonts.inter(color: muted, fontSize: 13),
-        ),
-        data: (v) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                ReligionGlyph(religionId: religionId, size: 12, color: accent),
-                const SizedBox(width: 6),
-                Text(
-                  'VERSE OF THE DAY',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: accent,
-                    fontSize: 9,
-                    letterSpacing: 1.8,
-                    fontWeight: FontWeight.w600,
+        child: AnimatedBuilder(
+          animation: _glare,
+          builder: (context, child) => Stack(
+            children: [
+              child!,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment(-2.5 + 5 * _glare.value, -1),
+                        end: Alignment(-1.5 + 5 * _glare.value, 1),
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.16),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '"${v.text}"',
-              style: GoogleFonts.cormorantGaramond(
-                color: fg,
-                fontSize: 19,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w500,
-                height: 1.4,
               ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+            ],
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${v.source.toUpperCase()} · ${v.ref}',
-              style: GoogleFonts.jetBrainsMono(
-                color: accent,
-                fontSize: 9,
-                letterSpacing: 0.8,
+            child: verse.when(
+              loading: () => SizedBox(
+                height: 72,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation(widget.accent),
+                  ),
+                ),
+              ),
+              error: (_, _) => Text(
+                'Verse unavailable',
+                style: GoogleFonts.inter(color: widget.muted, fontSize: 13),
+              ),
+              data: (v) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ReligionGlyph(
+                          religionId: widget.religionId,
+                          size: 12,
+                          color: widget.accent),
+                      const SizedBox(width: 6),
+                      Text(
+                        'VERSE OF THE DAY',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: widget.accent,
+                          fontSize: 9,
+                          letterSpacing: 1.8,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (v.originalText != null) ...[
+                    Text(
+                      v.originalText!,
+                      textDirection: widget.religionId == 'islam'
+                          ? TextDirection.rtl
+                          : TextDirection.ltr,
+                      style: TextStyle(
+                        color: widget.fg.withValues(alpha: 0.75),
+                        fontSize: widget.religionId == 'islam' ? 16 : 14,
+                        height: 1.5,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    '"${v.text}"',
+                    style: GoogleFonts.cormorantGaramond(
+                      color: widget.fg,
+                      fontSize: 19,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${v.source.toUpperCase()} · ${v.ref}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: widget.accent,
+                      fontSize: 9,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

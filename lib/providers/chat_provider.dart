@@ -46,7 +46,7 @@ class ChatState {
 }
 
 final chatProvider =
-    StateNotifierProvider.autoDispose<ChatNotifier, ChatState>(
+    StateNotifierProvider<ChatNotifier, ChatState>(
   (ref) => ChatNotifier(ref),
 );
 
@@ -124,7 +124,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (state.session == null) {
       final rState = _ref.read(religionProvider);
       final religion = rState.selectedReligion;
-      final selectedText = rState.selectedText;
+      final selectedText = rState.selectedText ?? religion?.texts.firstOrNull;
       if (religion == null || selectedText == null) return;
       startNewSession(
         religionId: religion.id,

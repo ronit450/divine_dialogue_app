@@ -80,8 +80,22 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
           } catch (_) {}
         }
         selectedText ??= selectedTexts.firstOrNull;
+        // Fallback: always have a text selected when religion is set
+        if (selectedText == null && selectedReligion.texts.isNotEmpty) {
+          selectedText = selectedReligion.texts.first;
+          selectedTexts = [selectedText];
+        }
       } catch (_) {
         selectedReligion = null;
+      }
+    }
+
+    // Safety net: if onboarding is done but religion couldn't be restored, default to first
+    if (onboardingDone && selectedReligion == null && religions.isNotEmpty) {
+      selectedReligion = religions.first;
+      if (selectedReligion.texts.isNotEmpty) {
+        selectedText = selectedReligion.texts.first;
+        selectedTexts = [selectedText];
       }
     }
 
@@ -113,7 +127,6 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
     final prefs = await SharedPreferences.getInstance();
     if (texts.isEmpty) {
       await prefs.remove('selected_texts');
-      await prefs.remove('selected_text');
       return;
     }
     await prefs.setString('selected_texts', texts.map((t) => t.id).join(','));

@@ -41,14 +41,27 @@ class TextsRepository {
 }
 
 class DailyVerse {
-  const DailyVerse({required this.text, required this.source, required this.ref});
+  const DailyVerse({
+    required this.text,
+    required this.source,
+    required this.ref,
+    this.textId,
+    this.navChapter,
+    this.originalText,
+  });
   final String text;
   final String source;
   final String ref;
+  final String? textId;
+  final int? navChapter;
+  final String? originalText;
 
   factory DailyVerse.fromJson(Map<String, dynamic> json) => DailyVerse(
     text: json['text'] as String,
     source: json['source'] as String,
     ref: json['ref'] as String,
+    textId: json['textId'] as String?,
+    navChapter: json['navChapter'] as int?,
+    originalText: json['originalText'] as String?,
   );
 }
