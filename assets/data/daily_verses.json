@@ -1,37 +1,37 @@
 {
   "islam": [
-    {"text": "Indeed, with hardship comes ease.", "source": "Quran 94:5", "ref": "Al-Inshirah"},
-    {"text": "And He found you lost and guided you.", "source": "Quran 93:7", "ref": "Ad-Duha"},
-    {"text": "So remember Me; I will remember you.", "source": "Quran 2:152", "ref": "Al-Baqarah"},
-    {"text": "Allah does not burden a soul beyond that it can bear.", "source": "Quran 2:286", "ref": "Al-Baqarah"},
-    {"text": "Whoever saves one life, it is as if he has saved all of mankind.", "source": "Quran 5:32", "ref": "Al-Ma'idah"},
-    {"text": "Seeking knowledge is an obligation upon every Muslim.", "source": "Sunan Ibn Majah 224", "ref": "Hadith"},
-    {"text": "The best of you are those who are best to their families.", "source": "Sunan al-Tirmidhi 3895", "ref": "Hadith"},
-    {"text": "Make things easy, do not make things difficult.", "source": "Sahih al-Bukhari 69", "ref": "Hadith"}
+    {"text": "Indeed, with hardship comes ease.", "source": "Quran 94:5", "ref": "Al-Inshirah", "textId": "quran", "navChapter": 94, "originalText": "إِنَّ مَعَ الْعُسْرِ يُسْرًا"},
+    {"text": "And He found you lost and guided you.", "source": "Quran 93:7", "ref": "Ad-Duha", "textId": "quran", "navChapter": 93, "originalText": "وَوَجَدَكَ ضَالًّا فَهَدَىٰ"},
+    {"text": "So remember Me; I will remember you.", "source": "Quran 2:152", "ref": "Al-Baqarah", "textId": "quran", "navChapter": 2, "originalText": "فَاذْكُرُونِي أَذْكُرْكُمْ"},
+    {"text": "Allah does not burden a soul beyond that it can bear.", "source": "Quran 2:286", "ref": "Al-Baqarah", "textId": "quran", "navChapter": 2, "originalText": "لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا"},
+    {"text": "Whoever saves one life, it is as if he has saved all of mankind.", "source": "Quran 5:32", "ref": "Al-Ma'idah", "textId": "quran", "navChapter": 5, "originalText": "مَن قَتَلَ نَفْسًا بِغَيْرِ نَفْسٍ فَكَأَنَّمَا قَتَلَ النَّاسَ جَمِيعًا"},
+    {"text": "Seeking knowledge is an obligation upon every Muslim.", "source": "Sunan Ibn Majah 224", "ref": "Hadith", "textId": "ibn_majah", "navChapter": null, "originalText": null},
+    {"text": "The best of you are those who are best to their families.", "source": "Sunan al-Tirmidhi 3895", "ref": "Hadith", "textId": "tirmidhi", "navChapter": null, "originalText": null},
+    {"text": "Make things easy, do not make things difficult.", "source": "Sahih al-Bukhari 69", "ref": "Hadith", "textId": "bukhari", "navChapter": null, "originalText": null}
   ],
   "hinduism": [
-    {"text": "You have a right to perform your prescribed duties, but you are not entitled to the fruits of your actions.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga"},
-    {"text": "The soul is never born nor dies at any time.", "source": "Bhagavad Gita 2:20", "ref": "Sankhya Yoga"},
-    {"text": "Set thy heart upon thy work, but never on its reward.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga"},
-    {"text": "Through selfless service, you will always be fruitful.", "source": "Bhagavad Gita 3:10", "ref": "Karma Yoga"},
-    {"text": "Whenever righteousness wanes, I send myself forth.", "source": "Bhagavad Gita 4:7", "ref": "Jnana Yoga"},
-    {"text": "The wise grieve neither for the living nor for the dead.", "source": "Bhagavad Gita 2:11", "ref": "Sankhya Yoga"},
-    {"text": "One who sees inaction in action, and action in inaction, is wise.", "source": "Bhagavad Gita 4:18", "ref": "Jnana Yoga"}
+    {"text": "You have a right to perform your prescribed duties, but you are not entitled to the fruits of your actions.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga", "textId": "bhagavad_gita", "navChapter": 2, "originalText": "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"},
+    {"text": "The soul is never born nor dies at any time.", "source": "Bhagavad Gita 2:20", "ref": "Sankhya Yoga", "textId": "bhagavad_gita", "navChapter": 2, "originalText": "न जायते म्रियते वा कदाचिन्"},
+    {"text": "Set thy heart upon thy work, but never on its reward.", "source": "Bhagavad Gita 2:47", "ref": "Karma Yoga", "textId": "bhagavad_gita", "navChapter": 2, "originalText": "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"},
+    {"text": "Through selfless service, you will always be fruitful.", "source": "Bhagavad Gita 3:10", "ref": "Karma Yoga", "textId": "bhagavad_gita", "navChapter": 3, "originalText": "सहयज्ञाः प्रजाः सृष्ट्वा पुरोवाच प्रजापतिः"},
+    {"text": "Whenever righteousness wanes, I send myself forth.", "source": "Bhagavad Gita 4:7", "ref": "Jnana Yoga", "textId": "bhagavad_gita", "navChapter": 4, "originalText": "यदा यदा हि धर्मस्य ग्लानिर्भवति भारत"},
+    {"text": "The wise grieve neither for the living nor for the dead.", "source": "Bhagavad Gita 2:11", "ref": "Sankhya Yoga", "textId": "bhagavad_gita", "navChapter": 2, "originalText": "अशोच्यानन्वशोचस्त्वं प्रज्ञावादांश्च भाषसे"},
+    {"text": "One who sees inaction in action, and action in inaction, is wise.", "source": "Bhagavad Gita 4:18", "ref": "Jnana Yoga", "textId": "bhagavad_gita", "navChapter": 4, "originalText": "कर्मण्यकर्म यः पश्येदकर्मणि च कर्म यः"}
   ],
   "sikhism": [
-    {"text": "There is but One God. His name is Truth; He is the Creator.", "source": "Guru Granth Sahib Ji, Ang 1", "ref": "Japji Sahib"},
-    {"text": "One who serves the True Guru finds peace.", "source": "Guru Granth Sahib Ji, Ang 40", "ref": "Siree Raag"},
-    {"text": "The body is the temple of the Lord; within it is the jewel of spiritual wisdom.", "source": "Guru Granth Sahib Ji, Ang 1346", "ref": "Parbhati"},
-    {"text": "By His Grace, He blesses us with His Name. With His Name, all hunger is satisfied.", "source": "Guru Granth Sahib Ji, Ang 2", "ref": "Japji Sahib"},
-    {"text": "He who regards all with a single eye and knows them all to be one — he alone is spiritually wise.", "source": "Guru Granth Sahib Ji, Ang 647", "ref": "Sorath"}
+    {"text": "There is but One God. His name is Truth; He is the Creator.", "source": "Guru Granth Sahib Ji, Ang 1", "ref": "Japji Sahib", "textId": "guru_granth_sahib", "navChapter": 1, "originalText": "ੴ ਸਤਿ ਨਾਮੁ ਕਰਤਾ ਪੁਰਖੁ ਨਿਰਭਉ ਨਿਰਵੈਰੁ"},
+    {"text": "One who serves the True Guru finds peace.", "source": "Guru Granth Sahib Ji, Ang 40", "ref": "Siree Raag", "textId": "guru_granth_sahib", "navChapter": 40, "originalText": "ਸਤਿਗੁਰ ਕੀ ਸੇਵਾ ਸਫਲੁ ਹੈ ਜੇ ਕੋ ਕਰੇ ਚਿਤੁ ਲਾਇ"},
+    {"text": "The body is the temple of the Lord; within it is the jewel of spiritual wisdom.", "source": "Guru Granth Sahib Ji, Ang 1346", "ref": "Parbhati", "textId": "guru_granth_sahib", "navChapter": 1346, "originalText": "ਸਰੀਰੁ ਹਰਿ ਮੰਦਰੁ ਤਿਸੁ ਮਹਿ ਗਿਆਨ ਰਤਨੁ ਪਰਗਾਸੁ"},
+    {"text": "By His Grace, He blesses us with His Name. With His Name, all hunger is satisfied.", "source": "Guru Granth Sahib Ji, Ang 2", "ref": "Japji Sahib", "textId": "guru_granth_sahib", "navChapter": 2, "originalText": "ਨਾਮਿ ਰਤੇ ਤਿਨਾ ਭੁਖ ਲਹਿ ਜਾਇ"},
+    {"text": "He who regards all with a single eye and knows them all to be one — he alone is spiritually wise.", "source": "Guru Granth Sahib Ji, Ang 647", "ref": "Sorath", "textId": "guru_granth_sahib", "navChapter": 647, "originalText": "ਸਭੁ ਕੋ ਸਖਾ ਵੇਖੈ ਅਪਾਰਾ ਏਕੋ ਜਾਣੈ"}
   ],
   "christianity": [
-    {"text": "For God so loved the world that he gave his one and only Son.", "source": "John 3:16", "ref": "New Testament"},
-    {"text": "I can do all things through Christ who strengthens me.", "source": "Philippians 4:13", "ref": "New Testament"},
-    {"text": "Trust in the Lord with all your heart and lean not on your own understanding.", "source": "Proverbs 3:5", "ref": "Old Testament"},
-    {"text": "The Lord is my shepherd; I shall not want.", "source": "Psalm 23:1", "ref": "Psalms"},
-    {"text": "For I know the plans I have for you, plans to prosper you and not to harm you.", "source": "Jeremiah 29:11", "ref": "Old Testament"},
-    {"text": "Love is patient, love is kind. It does not envy, it does not boast.", "source": "1 Corinthians 13:4", "ref": "New Testament"},
-    {"text": "Ask and it will be given to you; seek and you will find.", "source": "Matthew 7:7", "ref": "New Testament"}
+    {"text": "For God so loved the world that he gave his one and only Son.", "source": "John 3:16", "ref": "New Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "I can do all things through Christ who strengthens me.", "source": "Philippians 4:13", "ref": "New Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "Trust in the Lord with all your heart and lean not on your own understanding.", "source": "Proverbs 3:5", "ref": "Old Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "The Lord is my shepherd; I shall not want.", "source": "Psalm 23:1", "ref": "Psalms", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "For I know the plans I have for you, plans to prosper you and not to harm you.", "source": "Jeremiah 29:11", "ref": "Old Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "Love is patient, love is kind. It does not envy, it does not boast.", "source": "1 Corinthians 13:4", "ref": "New Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null},
+    {"text": "Ask and it will be given to you; seek and you will find.", "source": "Matthew 7:7", "ref": "New Testament", "textId": "bible_nrsv", "navChapter": null, "originalText": null}
   ]
 }
