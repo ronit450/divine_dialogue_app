@@ -1,11 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/chat_message.dart';
+import '../../services/assembly_ai_service.dart';
+import 'voice/voice_recorder.dart';
+
+enum VoiceState { idle, recording, silenceError, processing }
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -17,6 +24,12 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _voiceRecorder = VoiceRecorder();
+
+  VoiceState _voiceState = VoiceState.idle;
+  StreamSubscription<Amplitude>? _ampSub;
+  Timer? _silenceTimer;
+  DateTime? _lastSoundTime;
 
   @override
   void initState() {
@@ -37,7 +50,125 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _controller.dispose();
     _scrollCtrl.dispose();
+    _ampSub?.cancel();
+    _silenceTimer?.cancel();
+    _voiceRecorder.dispose();
     super.dispose();
+  }
+
+  String _languageCode() {
+    final religion = ref.read(religionProvider).selectedReligion;
+    if (religion == null) return 'ur';
+    switch (religion.id) {
+      case 'islam':
+        return 'ur';
+      case 'hinduism':
+        return 'hi';
+      default:
+        return 'ur';
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      if (status.isPermanentlyDenied && mounted) _showMicPermissionDialog();
+      return;
+    }
+    try {
+      await _voiceRecorder.start();
+      _lastSoundTime = DateTime.now();
+      _ampSub = _voiceRecorder.amplitudeStream.listen(_onAmplitude);
+      _silenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_lastSoundTime != null &&
+            DateTime.now().difference(_lastSoundTime!).inSeconds >= 10 &&
+            _voiceState == VoiceState.recording) {
+          setState(() => _voiceState = VoiceState.silenceError);
+        }
+      });
+      setState(() => _voiceState = VoiceState.recording);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start recording: $e')),
+        );
+      }
+    }
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    if (amp.current > -40) {
+      _lastSoundTime = DateTime.now();
+      if (_voiceState == VoiceState.silenceError) {
+        setState(() => _voiceState = VoiceState.recording);
+      }
+    }
+  }
+
+  Future<void> _cancelVoice() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.idle);
+    try {
+      await _voiceRecorder.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _stopAndTranscribe() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.processing);
+    try {
+      final path = await _voiceRecorder.stop();
+      final langCode = _languageCode();
+      final text = await AssemblyAiService.instance
+          .transcribe(path, languageCode: langCode);
+      if (text.isNotEmpty && mounted) {
+        ref.read(chatProvider.notifier).sendMessage(text);
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transcription failed: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _voiceState = VoiceState.idle);
+    }
+  }
+
+  void _showMicPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Microphone Permission'),
+        content: const Text(
+          'Microphone access is required for voice input. '
+          'Please enable it in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startNewChat() {
@@ -54,6 +185,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _send() {
+    if (_voiceState == VoiceState.recording ||
+        _voiceState == VoiceState.silenceError) {
+      _stopAndTranscribe();
+      return;
+    }
+    if (_voiceState == VoiceState.processing) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
@@ -97,7 +234,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chatState = ref.watch(chatProvider);
     final religionState = ref.watch(religionProvider);
     final religion = religionState.selectedReligion;
-    final accent = religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
+    final accent =
+        religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -106,6 +244,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
 
     final messages = chatState.session?.messages ?? [];
+    final isAiActive = chatState.isTyping || chatState.isStreaming;
 
     return Scaffold(
       backgroundColor: bg,
@@ -123,7 +262,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Expanded(
             child: messages.isEmpty
-                ? _EmptyState(accent: accent, religion: religion?.name, fg: fg, muted: muted)
+                ? _EmptyState(
+                    accent: accent,
+                    religion: religion?.name,
+                    fg: fg,
+                    muted: muted,
+                  )
                 : ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -165,7 +309,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               fg: fg,
               muted: muted,
               line: line,
-              onDismiss: () => ref.read(chatProvider.notifier).clearPendingVerse(),
+              onDismiss: () =>
+                  ref.read(chatProvider.notifier).clearPendingVerse(),
             ),
           _InputBar(
             controller: _controller,
@@ -176,12 +321,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             muted: muted,
             line: line,
             bg: bg,
+            voiceState: _voiceState,
+            onMicTap: _startRecording,
+            onVoiceCancel: _cancelVoice,
+            isAiActive: isAiActive,
+            amplitudeStream: (_voiceState == VoiceState.recording ||
+                    _voiceState == VoiceState.silenceError)
+                ? _voiceRecorder.amplitudeStream
+                : null,
           ),
         ],
       ),
     );
   }
 }
+
+// ─── App Bar ────────────────────────────────────────────────────────────────
 
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const _ChatAppBar({
@@ -236,18 +391,23 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Text(
               title,
               style: GoogleFonts.cormorantGaramond(
-                color: fg, fontSize: 20, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                color: fg,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                fontStyle: FontStyle.italic,
               ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
-            icon: Icon(Icons.history_rounded, color: fg.withValues(alpha: 0.6), size: 20),
+            icon: Icon(Icons.history_rounded,
+                color: fg.withValues(alpha: 0.6), size: 20),
             onPressed: onHistory,
             tooltip: 'History',
           ),
           IconButton(
-            icon: Icon(Icons.add_comment_outlined, color: accent, size: 20),
+            icon:
+                Icon(Icons.add_comment_outlined, color: accent, size: 20),
             onPressed: onNewChat,
             tooltip: 'New chat',
           ),
@@ -256,6 +416,8 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+// ─── Empty State ─────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({
@@ -290,10 +452,15 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              religion != null ? 'Ask anything about $religion' : 'Start a conversation',
+              religion != null
+                  ? 'Ask anything about $religion'
+                  : 'Start a conversation',
               textAlign: TextAlign.center,
               style: GoogleFonts.cormorantGaramond(
-                color: fg, fontSize: 20, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                color: fg,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                fontStyle: FontStyle.italic,
               ),
             ),
             const SizedBox(height: 8),
@@ -308,6 +475,8 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+// ─── Message Bubble ──────────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
@@ -372,7 +541,8 @@ class _MessageBubble extends StatelessWidget {
                     border: Border.all(
                         color: accent.withValues(alpha: 0.25), width: 0.5),
                   ),
-                  child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
+                  child:
+                      Icon(Icons.auto_stories_rounded, color: accent, size: 13),
                 ),
               ],
               Flexible(
@@ -435,6 +605,8 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 }
+
+// ─── Citations Sheet ─────────────────────────────────────────────────────────
 
 class _CitationsSheet extends StatelessWidget {
   const _CitationsSheet({
@@ -590,7 +762,8 @@ class _CitationCard extends StatelessWidget {
           if (hasOriginal) ...[
             const SizedBox(height: 12),
             Directionality(
-              textDirection: citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
+              textDirection:
+                  citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
               child: Text(
                 citation.originalText,
                 style: TextStyle(
@@ -600,7 +773,8 @@ class _CitationCard extends StatelessWidget {
                   fontWeight: FontWeight.w400,
                   fontFamily: citation.isRtl ? null : 'serif',
                 ),
-                textAlign: citation.isRtl ? TextAlign.right : TextAlign.left,
+                textAlign:
+                    citation.isRtl ? TextAlign.right : TextAlign.left,
               ),
             ),
             const SizedBox(height: 10),
@@ -608,7 +782,7 @@ class _CitationCard extends StatelessWidget {
           ],
           const SizedBox(height: 10),
           Text(
-            '“${citation.translation}”',
+            '"${citation.translation}"',
             style: GoogleFonts.cormorantGaramond(
               color: fg.withValues(alpha: 0.8),
               fontSize: 14,
@@ -621,6 +795,8 @@ class _CitationCard extends StatelessWidget {
     );
   }
 }
+
+// ─── Verse Banner ────────────────────────────────────────────────────────────
 
 class _VerseBanner extends StatelessWidget {
   const _VerseBanner({
@@ -664,14 +840,17 @@ class _VerseBanner extends StatelessWidget {
                 Text(
                   verseContext.reference.toUpperCase(),
                   style: GoogleFonts.jetBrainsMono(
-                    fontSize: 8, color: accent, letterSpacing: 1.2,
+                    fontSize: 8,
+                    color: accent,
+                    letterSpacing: 1.2,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   preview,
-                  style: GoogleFonts.inter(fontSize: 11, color: muted, height: 1.4),
+                  style: GoogleFonts.inter(
+                      fontSize: 11, color: muted, height: 1.4),
                 ),
               ],
             ),
@@ -686,6 +865,8 @@ class _VerseBanner extends StatelessWidget {
     );
   }
 }
+
+// ─── Streaming Bubble ────────────────────────────────────────────────────────
 
 class _StreamingBubble extends StatelessWidget {
   const _StreamingBubble({
@@ -720,7 +901,8 @@ class _StreamingBubble extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: accent.withValues(alpha: 0.12),
-              border: Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
+              border:
+                  Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
             ),
             child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
           ),
@@ -729,9 +911,10 @@ class _StreamingBubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  constraints:
-                      BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: aiBg,
                     borderRadius: const BorderRadius.only(
@@ -749,7 +932,8 @@ class _StreamingBubble extends StatelessWidget {
                       Flexible(
                         child: Text(
                           text,
-                          style: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+                          style:
+                              GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
                         ),
                       ),
                       const SizedBox(width: 2),
@@ -784,6 +968,8 @@ class _StreamingBubble extends StatelessWidget {
     );
   }
 }
+
+// ─── Blinking Cursor ─────────────────────────────────────────────────────────
 
 class _BlinkingCursor extends StatefulWidget {
   const _BlinkingCursor({required this.color});
@@ -829,6 +1015,8 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   }
 }
 
+// ─── Typing Indicator ────────────────────────────────────────────────────────
+
 class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator({
     required this.accent,
@@ -853,7 +1041,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
       ..repeat(reverse: true);
     _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
@@ -912,7 +1101,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                           width: 6,
                           height: 6,
                           margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
+                          decoration: BoxDecoration(
+                              shape: BoxShape.circle, color: dotColor),
                         ),
                       ),
                     ),
@@ -924,6 +1114,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   }
 }
 
+// ─── Input Bar ───────────────────────────────────────────────────────────────
+
 class _InputBar extends StatefulWidget {
   const _InputBar({
     required this.controller,
@@ -934,6 +1126,11 @@ class _InputBar extends StatefulWidget {
     required this.muted,
     required this.line,
     required this.bg,
+    required this.voiceState,
+    required this.onMicTap,
+    required this.onVoiceCancel,
+    required this.isAiActive,
+    this.amplitudeStream,
   });
 
   final TextEditingController controller;
@@ -944,6 +1141,11 @@ class _InputBar extends StatefulWidget {
   final Color muted;
   final Color line;
   final Color bg;
+  final VoiceState voiceState;
+  final VoidCallback onMicTap;
+  final VoidCallback onVoiceCancel;
+  final bool isAiActive;
+  final Stream<Amplitude>? amplitudeStream;
 
   @override
   State<_InputBar> createState() => _InputBarState();
@@ -969,10 +1171,195 @@ class _InputBarState extends State<_InputBar> {
     if (hasText != _hasText) setState(() => _hasText = hasText);
   }
 
+  bool get _inVoiceMode => widget.voiceState != VoiceState.idle;
+
+  Widget _buildVoiceContent() {
+    switch (widget.voiceState) {
+      case VoiceState.recording:
+        return _VoiceWaveform(
+          key: const ValueKey('waveform'),
+          accent: widget.accent,
+          amplitudeStream: widget.amplitudeStream!,
+        );
+      case VoiceState.silenceError:
+        return Center(
+          key: const ValueKey('silence-error'),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.mic_off_rounded,
+                  size: 14, color: Colors.orange.shade400),
+              const SizedBox(width: 6),
+              Text(
+                'Speak or press send',
+                style: GoogleFonts.inter(
+                  color: Colors.orange.shade400,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        );
+      case VoiceState.processing:
+        return Center(
+          key: const ValueKey('processing'),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(widget.accent),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Transcribing…',
+                style: GoogleFonts.inter(color: widget.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        );
+      case VoiceState.idle:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildInputArea() {
+    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
+
+    if (!_inVoiceMode) {
+      return Container(
+        key: const ValueKey('text-field'),
+        decoration: BoxDecoration(
+          color: fieldBg,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: widget.line),
+        ),
+        child: TextField(
+          controller: widget.controller,
+          style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
+          maxLines: 4,
+          minLines: 1,
+          textInputAction: TextInputAction.send,
+          onSubmitted: (_) => widget.onSend(),
+          decoration: InputDecoration(
+            hintText: 'Ask about the text…',
+            hintStyle: GoogleFonts.inter(color: widget.muted, fontSize: 14),
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      key: const ValueKey('voice-area'),
+      height: 46,
+      decoration: BoxDecoration(
+        color: fieldBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: widget.voiceState == VoiceState.silenceError
+              ? Colors.orange.shade400
+              : widget.accent.withValues(alpha: 0.5),
+        ),
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: _buildVoiceContent(),
+      ),
+    );
+  }
+
+  Widget _buildRightButton() {
+    // During processing: no-op placeholder
+    if (widget.voiceState == VoiceState.processing) {
+      return const SizedBox(key: ValueKey('processing-btn'), width: 42, height: 42);
+    }
+
+    // In recording or silence error: send = stop + transcribe
+    if (widget.voiceState == VoiceState.recording ||
+        widget.voiceState == VoiceState.silenceError) {
+      return GestureDetector(
+        key: const ValueKey('voice-send'),
+        onTap: widget.onSend,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.accent,
+            boxShadow: [
+              BoxShadow(
+                  color: widget.accent.withValues(alpha: 0.3), blurRadius: 10),
+            ],
+          ),
+          child:
+              const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+        ),
+      );
+    }
+
+    // Idle with typed text: send
+    if (_hasText) {
+      return GestureDetector(
+        key: const ValueKey('send'),
+        onTap: widget.onSend,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.accent,
+            boxShadow: [
+              BoxShadow(
+                  color: widget.accent.withValues(alpha: 0.3), blurRadius: 10),
+            ],
+          ),
+          child:
+              const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+        ),
+      );
+    }
+
+    // Idle, no text, AI not active: mic button
+    if (!widget.isAiActive) {
+      return GestureDetector(
+        key: const ValueKey('mic'),
+        onTap: widget.onMicTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: widget.line),
+          ),
+          child: Icon(Icons.mic_rounded, color: widget.accent, size: 20),
+        ),
+      );
+    }
+
+    // AI active, no text: sparkle placeholder
+    return Container(
+      key: const ValueKey('idle'),
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: widget.line),
+      ),
+      child: Icon(Icons.auto_awesome_outlined, color: widget.muted, size: 18),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
@@ -982,29 +1369,28 @@ class _InputBarState extends State<_InputBar> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: fieldBg,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: widget.line),
-              ),
-              child: TextField(
-                controller: widget.controller,
-                style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
-                maxLines: 4,
-                minLines: 1,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => widget.onSend(),
-                decoration: InputDecoration(
-                  hintText: 'Ask about the text…',
-                  hintStyle:
-                      GoogleFonts.inter(color: widget.muted, fontSize: 14),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+          if (_inVoiceMode) ...[
+            GestureDetector(
+              onTap: widget.onVoiceCancel,
+              child: Container(
+                width: 36,
+                height: 36,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: widget.line),
                 ),
+                child:
+                    Icon(Icons.close_rounded, color: widget.muted, size: 18),
               ),
+            ),
+          ],
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: _buildInputArea(),
             ),
           ),
           const SizedBox(width: 10),
@@ -1012,40 +1398,132 @@ class _InputBarState extends State<_InputBar> {
             duration: const Duration(milliseconds: 200),
             transitionBuilder: (child, anim) =>
                 ScaleTransition(scale: anim, child: child),
-            child: _hasText
-                ? GestureDetector(
-                    key: const ValueKey('send'),
-                    onTap: widget.onSend,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: widget.accent,
-                        boxShadow: [
-                          BoxShadow(
-                              color: widget.accent.withValues(alpha: 0.3),
-                              blurRadius: 10),
-                        ],
-                      ),
-                      child: const Icon(Icons.arrow_upward_rounded,
-                          color: Colors.white, size: 20),
-                    ),
-                  )
-                : Container(
-                    key: const ValueKey('idle'),
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: widget.line),
-                    ),
-                    child: Icon(Icons.auto_awesome_outlined,
-                        color: widget.muted, size: 18),
-                  ),
+            child: _buildRightButton(),
           ),
         ],
       ),
     );
   }
+}
+
+// ─── Voice Waveform ──────────────────────────────────────────────────────────
+
+class _VoiceWaveform extends StatefulWidget {
+  const _VoiceWaveform({
+    super.key,
+    required this.accent,
+    required this.amplitudeStream,
+  });
+
+  final Color accent;
+  final Stream<Amplitude> amplitudeStream;
+
+  @override
+  State<_VoiceWaveform> createState() => _VoiceWaveformState();
+}
+
+class _VoiceWaveformState extends State<_VoiceWaveform> {
+  static const _barCount = 35;
+  final List<double> _bars = List.filled(_barCount, 0.0);
+  StreamSubscription<Amplitude>? _ampSub;
+  StreamSubscription<int>? _timerSub;
+  int _seconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ampSub = widget.amplitudeStream.listen(_onAmplitude);
+    _timerSub = Stream.periodic(const Duration(seconds: 1), (i) => i + 1)
+        .listen((s) {
+      if (mounted) setState(() => _seconds = s);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ampSub?.cancel();
+    _timerSub?.cancel();
+    super.dispose();
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    // Normalize: -60dBFS (silence) → 0.0, 0dBFS (max) → 1.0
+    final normalized = ((amp.current + 60) / 60).clamp(0.0, 1.0);
+    if (mounted) {
+      setState(() {
+        _bars.removeAt(0);
+        _bars.add(normalized);
+      });
+    }
+  }
+
+  String get _timeLabel {
+    final m = _seconds ~/ 60;
+    final s = _seconds % 60;
+    return '${m.toString().padLeft(1, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Text(
+            'LISTENING · $_timeLabel',
+            style: GoogleFonts.jetBrainsMono(
+              color: widget.accent,
+              fontSize: 9,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: CustomPaint(
+              painter: _WaveformPainter(bars: List.of(_bars), color: widget.accent),
+              size: const Size(double.infinity, 28),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Waveform Painter ────────────────────────────────────────────────────────
+
+class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.bars, required this.color});
+
+  final List<double> bars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barW = 2.0;
+    const gap = 2.5;
+    const step = barW + gap;
+    final minH = size.height * 0.12;
+    final maxH = size.height;
+    final paint = Paint()..strokeCap = StrokeCap.round;
+
+    final totalW = bars.length * step - gap;
+    var x = (size.width - totalW) / 2;
+
+    for (final bar in bars) {
+      final h = minH + bar * (maxH - minH);
+      final top = (size.height - h) / 2;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, top, barW, h),
+        const Radius.circular(1),
+      );
+      paint.color = color.withValues(alpha: 0.25 + bar * 0.75);
+      canvas.drawRRect(rect, paint);
+      x += step;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) => true;
 }
