@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../core/models/chat_message.dart';
@@ -175,15 +176,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       error: null,
       clearPendingVerse: true,
     );
-    await ChatRepository.instance.saveSession(withUser);
+    // Fire save concurrently — don't block stream start
+    unawaited(ChatRepository.instance.saveSession(withUser));
     _ref.read(historyProvider.notifier).load();
 
     try {
       final textBuffer = StringBuffer();
       List<Citation> citations = [];
       List<dynamic> newContext = [];
+      var lastRender = DateTime.now();
 
-      // Cancel any in-flight request before starting a new one
       DivineApi.instance.cancelCurrentRequest();
 
       // Cap context window to last 20 items to bound memory + API payload size
@@ -204,10 +206,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
         } else if (event is ApiStreamChunk) {
           textBuffer.write(event.text);
-          state = state.copyWith(
-            isTyping: false,
-            streamingText: textBuffer.toString(),
-          );
+          final now = DateTime.now();
+          if (now.difference(lastRender).inMilliseconds >= 50) {
+            lastRender = now;
+            state = state.copyWith(
+              isTyping: false,
+              streamingText: textBuffer.toString(),
+            );
+          } else if (state.isTyping) {
+            state = state.copyWith(isTyping: false);
+          }
         } else if (event is ApiStreamDone) {
           textBuffer.clear();
           textBuffer.write(event.answer);

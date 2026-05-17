@@ -41,12 +41,19 @@ class DivineApi {
   http.Client _client = http.Client();
   String get _baseUrl => dotenv.env['BASE_URL'] ?? '';
 
+  String? _cachedToken;
+  DateTime? _tokenExpiry;
+
   Future<Map<String, String>> _headers() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final now = DateTime.now();
+    if (_cachedToken == null || _tokenExpiry == null || now.isAfter(_tokenExpiry!)) {
+      _cachedToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+      _tokenExpiry = now.add(const Duration(minutes: 55));
+    }
     return {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (_cachedToken != null) 'Authorization': 'Bearer $_cachedToken',
     };
   }
 
