@@ -13,6 +13,8 @@ class ChatState {
     this.session,
     this.isTyping = false,
     this.streamingText = '',
+    this.statusMessage = '',
+    this.streamingPassages = const [],
     this.conversationContext = const [],
     this.error,
     this.pendingVerseContext,
@@ -20,6 +22,8 @@ class ChatState {
   final ChatSession? session;
   final bool isTyping;
   final String streamingText;
+  final String statusMessage;
+  final List<Citation> streamingPassages;
   final List<dynamic> conversationContext;
   final String? error;
   final VerseContext? pendingVerseContext;
@@ -30,6 +34,8 @@ class ChatState {
     ChatSession? session,
     bool? isTyping,
     String? streamingText,
+    String? statusMessage,
+    List<Citation>? streamingPassages,
     List<dynamic>? conversationContext,
     String? error,
     VerseContext? pendingVerseContext,
@@ -38,6 +44,8 @@ class ChatState {
     session: session ?? this.session,
     isTyping: isTyping ?? this.isTyping,
     streamingText: streamingText ?? this.streamingText,
+    statusMessage: statusMessage ?? this.statusMessage,
+    streamingPassages: streamingPassages ?? this.streamingPassages,
     conversationContext: conversationContext ?? this.conversationContext,
     error: error,
     pendingVerseContext:
@@ -162,6 +170,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       session: withUser,
       isTyping: true,
       streamingText: '',
+      statusMessage: '',
+      streamingPassages: const [],
       error: null,
       clearPendingVerse: true,
     );
@@ -173,6 +183,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       List<Citation> citations = [];
       List<dynamic> newContext = [];
 
+      // Cancel any in-flight request before starting a new one
+      DivineApi.instance.cancelCurrentRequest();
+
       // Cap context window to last 20 items to bound memory + API payload size
       final ctx = state.conversationContext;
       final cappedContext = ctx.length > 20 ? ctx.sublist(ctx.length - 20) : ctx;
@@ -181,16 +194,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
         question: apiQuestion,
         religion: current.religionId,
         context: cappedContext,
+        books: _booksForText(current.textId),
       )) {
-        if (event is ApiStreamChunk) {
+        if (event is ApiStreamStatus) {
+          state = state.copyWith(statusMessage: event.message);
+        } else if (event is ApiStreamPassage) {
+          state = state.copyWith(
+            streamingPassages: [...state.streamingPassages, event.citation],
+          );
+        } else if (event is ApiStreamChunk) {
           textBuffer.write(event.text);
           state = state.copyWith(
             isTyping: false,
             streamingText: textBuffer.toString(),
           );
         } else if (event is ApiStreamDone) {
+          textBuffer.clear();
+          textBuffer.write(event.answer);
           citations = event.citations;
           newContext = event.context;
+        } else if (event is ApiStreamError) {
+          throw Exception(event.message);
         }
       }
 
@@ -210,6 +234,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         session: withAi,
         isTyping: false,
         streamingText: '',
+        statusMessage: '',
+        streamingPassages: const [],
         conversationContext: newContext,
       );
       await ChatRepository.instance.saveSession(withAi);
@@ -218,8 +244,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(
         isTyping: false,
         streamingText: '',
+        statusMessage: '',
+        streamingPassages: const [],
         error: e.toString().replaceFirst('Exception: ', ''),
       );
     }
+  }
+
+  static List<String> _booksForText(String textId) {
+    const mapping = {
+      'quran': 'quran',
+      'guru_granth_sahib': 'guru_granth_sahib',
+      'bible_nrsv': 'bible',
+      'bhagavad_gita': 'bhagavad_gita',
+    };
+    final key = mapping[textId];
+    return key != null ? [key] : [];
   }
 }

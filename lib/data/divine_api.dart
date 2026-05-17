@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -6,109 +7,68 @@ import '../core/models/chat_message.dart';
 
 sealed class ApiStreamEvent {}
 
+class ApiStreamStatus extends ApiStreamEvent {
+  ApiStreamStatus(this.message);
+  final String message;
+}
+
+class ApiStreamPassage extends ApiStreamEvent {
+  ApiStreamPassage(this.citation);
+  final Citation citation;
+}
+
 class ApiStreamChunk extends ApiStreamEvent {
   ApiStreamChunk(this.text);
   final String text;
 }
 
 class ApiStreamDone extends ApiStreamEvent {
-  ApiStreamDone({required this.citations, required this.context});
+  ApiStreamDone({required this.answer, required this.citations, required this.context});
+  final String answer;
   final List<Citation> citations;
   final List<dynamic> context;
+}
+
+class ApiStreamError extends ApiStreamEvent {
+  ApiStreamError(this.message);
+  final String message;
 }
 
 class DivineApi {
   DivineApi._();
   static final DivineApi instance = DivineApi._();
 
-  final _client = http.Client();
+  http.Client _client = http.Client();
   String get _baseUrl => dotenv.env['BASE_URL'] ?? '';
 
   Future<Map<String, String>> _headers() async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     return {
       'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  void cancelCurrentRequest() {
+    _client.close();
+    _client = http.Client();
   }
 
   Stream<ApiStreamEvent> chatStream({
     required String question,
     required String religion,
     required List<dynamic> context,
-  }) => _chatNonStream(question: question, religion: religion, context: context);
-
-  // Plain POST → full JSON response, then simulates word-by-word streaming for UI.
-  // Switch to _chatStreamSse once backend SSE endpoint is ready.
-  Stream<ApiStreamEvent> _chatNonStream({
-    required String question,
-    required String religion,
-    required List<dynamic> context,
+    List<String> books = const [],
   }) async* {
-    final http.Response response;
-    try {
-      response = await _client
-          .post(
-            Uri.parse('$_baseUrl/chat'),
-            headers: await _headers(),
-            body: jsonEncode({
-              'question': question,
-              'religion': religion,
-              'context': context,
-            }),
-          )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw Exception('Request timed out'),
-          );
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
-
-    if (response.statusCode != 200) {
-      final detail = _tryParseDetail(response.body);
-      throw Exception(detail ?? 'Server error ${response.statusCode}');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final answer = ((json['answer'] ?? json['response'] ?? json['text'] ?? json['message'] ?? '') as Object).toString();
-    final passages = (json['passages'] ?? json['sources'] ?? json['citations'] ?? []) as List;
-    final newContext = (json['context'] ?? []) as List;
-
-    if (answer.isEmpty) throw Exception('Empty response from server');
-
-    for (final word in answer.split(' ')) {
-      await Future.delayed(const Duration(milliseconds: 35));
-      yield ApiStreamChunk('$word ');
-    }
-
-    yield ApiStreamDone(
-      citations: passages.map((p) {
-        final m = p as Map<String, dynamic>;
-        return Citation(
-          reference: (m['source_label'] as String?) ?? '',
-          originalText: (m['original_script'] as String?) ?? '',
-          translation: (m['translation_en'] as String?) ?? '',
-          isRtl: (m['script_dir'] as String?) == 'rtl',
-        );
-      }).toList(),
-      context: newContext,
-    );
-  }
-
-  // ignore: unused_element
-  Stream<ApiStreamEvent> _chatStreamSse({
-    required String question,
-    required String religion,
-    required List<dynamic> context,
-  }) async* {
-    final request = http.Request('POST', Uri.parse('$_baseUrl/chat'));
-    request.headers['Content-Type'] = 'application/json';
-    request.headers['Accept'] = 'text/event-stream';
+    final request = http.Request('POST', Uri.parse('$_baseUrl/chat/stream'));
+    final headers = await _headers();
+    request.headers.addAll(headers);
     request.body = jsonEncode({
       'question': question,
       'religion': religion,
       'context': context,
+      'books': books,
     });
 
     final http.StreamedResponse sseResponse;
@@ -121,45 +81,68 @@ class DivineApi {
     if (sseResponse.statusCode != 200) {
       final body = await sseResponse.stream.bytesToString();
       final detail = _tryParseDetail(body);
-      throw Exception(detail ?? 'Server error ${sseResponse.statusCode}');
+      throw Exception(detail ?? 'HTTP ${sseResponse.statusCode}: ${sseResponse.reasonPhrase}');
     }
 
-    final pending = StringBuffer();
-    await for (final raw in sseResponse.stream.transform(utf8.decoder)) {
-      pending.write(raw);
-      final text = pending.toString();
-      final lines = text.split('\n');
-      pending.clear();
-      pending.write(lines.last);
+    final buffer = StringBuffer();
+    await for (final chunk in sseResponse.stream.transform(utf8.decoder)) {
+      buffer.write(chunk);
+      final raw = buffer.toString();
 
-      for (int i = 0; i < lines.length - 1; i++) {
-        final line = lines[i].trim();
-        if (!line.startsWith('data: ')) continue;
-        final data = line.substring(6).trim();
-        if (data.isEmpty || data == '[DONE]') continue;
+      int start = 0;
+      while (true) {
+        final end = raw.indexOf('\n\n', start);
+        if (end == -1) break;
+        final segment = raw.substring(start, end).trim();
+        start = end + 2;
+        if (!segment.startsWith('data: ')) continue;
+        final jsonStr = segment.substring(6).trim();
+        if (jsonStr.isEmpty) continue;
         try {
-          final j = jsonDecode(data) as Map<String, dynamic>;
-          if (j['chunk'] != null) {
-            yield ApiStreamChunk(j['chunk'] as String);
-          } else if (j['done'] == true) {
-            final passages = j['passages'] as List? ?? [];
-            yield ApiStreamDone(
-              citations: passages.map((p) {
-                final m = p as Map<String, dynamic>;
-                return Citation(
-                  reference: (m['source_label'] as String?) ?? '',
-                  originalText: (m['original_script'] as String?) ?? '',
-                  translation: (m['translation_en'] as String?) ?? '',
-                  isRtl: (m['script_dir'] as String?) == 'rtl',
-                );
-              }).toList(),
-              context: (j['context'] as List?) ?? [],
-            );
-          }
+          final j = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final event = _parseEvent(j);
+          if (event != null) yield event;
         } catch (_) {}
       }
+
+      buffer.clear();
+      if (start < raw.length) buffer.write(raw.substring(start));
     }
   }
+
+  ApiStreamEvent? _parseEvent(Map<String, dynamic> j) {
+    switch (j['type'] as String?) {
+      case 'status':
+        return ApiStreamStatus(j['message'] as String? ?? '');
+      case 'passage':
+        return ApiStreamPassage(_citationFromPassage(j));
+      case 'text_delta':
+        final text = j['text'] as String? ?? '';
+        return text.isNotEmpty ? ApiStreamChunk(text) : null;
+      case 'done':
+        final raw = j['answer'] as String? ?? '';
+        final answer = raw.replaceAll(RegExp(r'<answer>|</answer>'), '').trim();
+        final passages = (j['passages'] as List? ?? [])
+            .map((p) => _citationFromPassage(p as Map<String, dynamic>))
+            .toList();
+        return ApiStreamDone(
+          answer: answer,
+          citations: passages,
+          context: (j['context'] as List?) ?? [],
+        );
+      case 'error':
+        return ApiStreamError(j['message'] as String? ?? 'Unknown error');
+      default:
+        return null;
+    }
+  }
+
+  Citation _citationFromPassage(Map<String, dynamic> m) => Citation(
+        reference: (m['source_label'] as String?) ?? '',
+        originalText: (m['original_script'] as String?) ?? '',
+        translation: (m['translation_en'] as String?) ?? '',
+        isRtl: (m['script_dir'] as String?) == 'rtl',
+      );
 
   String? _tryParseDetail(String body) {
     try {

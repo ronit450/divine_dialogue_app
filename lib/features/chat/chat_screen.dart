@@ -134,13 +134,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         if (chatState.isStreaming) {
                           return _StreamingBubble(
                             text: chatState.streamingText,
+                            passageCount: chatState.streamingPassages.length,
                             accent: accent,
                             isDark: isDark,
                             fg: fg,
                             line: line,
                           );
                         }
-                        return _TypingIndicator(accent: accent, isDark: isDark, line: line);
+                        return _TypingIndicator(
+                          accent: accent,
+                          isDark: isDark,
+                          line: line,
+                          statusMessage: chatState.statusMessage,
+                        );
                       }
                       return _MessageBubble(
                         message: messages[i],
@@ -684,6 +690,7 @@ class _VerseBanner extends StatelessWidget {
 class _StreamingBubble extends StatelessWidget {
   const _StreamingBubble({
     required this.text,
+    required this.passageCount,
     required this.accent,
     required this.isDark,
     required this.fg,
@@ -691,6 +698,7 @@ class _StreamingBubble extends StatelessWidget {
   });
 
   final String text;
+  final int passageCount;
   final Color accent;
   final bool isDark;
   final Color fg;
@@ -717,34 +725,58 @@ class _StreamingBubble extends StatelessWidget {
             child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
           ),
           Flexible(
-            child: Container(
-              constraints:
-                  BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: aiBg,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(16),
-                ),
-                border: Border.all(color: line, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Flexible(
-                    child: Text(
-                      text,
-                      style: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  constraints:
+                      BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: aiBg,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(16),
                     ),
+                    border: Border.all(color: line, width: 1),
                   ),
-                  const SizedBox(width: 2),
-                  _BlinkingCursor(color: accent),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          text,
+                          style: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      _BlinkingCursor(color: accent),
+                    ],
+                  ),
+                ),
+                if (passageCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.menu_book_rounded, size: 11, color: accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$passageCount passage${passageCount > 1 ? 's' : ''} found',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: accent,
+                          fontSize: 9,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ],
@@ -798,10 +830,16 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
 }
 
 class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator({required this.accent, required this.isDark, required this.line});
+  const _TypingIndicator({
+    required this.accent,
+    required this.isDark,
+    required this.line,
+    this.statusMessage = '',
+  });
   final Color accent;
   final bool isDark;
   final Color line;
+  final String statusMessage;
 
   @override
   State<_TypingIndicator> createState() => _TypingIndicatorState();
@@ -852,21 +890,33 @@ class _TypingIndicatorState extends State<_TypingIndicator>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: widget.line, width: 1),
             ),
-            child: FadeTransition(
-              opacity: _anim,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  3,
-                  (i) => Container(
-                    width: 6,
-                    height: 6,
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
+            child: widget.statusMessage.isNotEmpty
+                ? FadeTransition(
+                    opacity: _anim,
+                    child: Text(
+                      widget.statusMessage,
+                      style: GoogleFonts.inter(
+                        color: dotColor,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                : FadeTransition(
+                    opacity: _anim,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(
+                        3,
+                        (i) => Container(
+                          width: 6,
+                          height: 6,
+                          margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
         ],
       ),
