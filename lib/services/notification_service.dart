@@ -14,8 +14,6 @@ class NotificationService {
     if (_initialized) return;
 
     tz.initializeTimeZones();
-    // No flutter_timezone needed — schedule times derived from Dart's local DateTime
-    tz.setLocalLocation(tz.UTC);
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings(
@@ -69,8 +67,8 @@ class NotificationService {
     if (!_initialized) await init();
 
     final body = durationDays != null
-        ? 'Day $dayNumber of $durationDays · $unitsPerDay ${unitLabel}s, ≈$estimatedMins min today.'
-        : 'Day $dayNumber · $unitsPerDay ${unitLabel}s, ≈$estimatedMins min today.';
+        ? 'Day $dayNumber of $durationDays · $unitsPerDay $unitLabel, ≈$estimatedMins min today.'
+        : 'Day $dayNumber · $unitsPerDay $unitLabel, ≈$estimatedMins min today.';
 
     const androidDetails = AndroidNotificationDetails(
       'divine_reading_reminders',
@@ -78,7 +76,7 @@ class NotificationService {
       channelDescription: 'Daily reminders for your reading plan',
       importance: Importance.high,
       priority: Priority.defaultPriority,
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_notification',
       largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
     );
     const iosDetails = DarwinNotificationDetails(
@@ -97,19 +95,27 @@ class NotificationService {
         ? await androidImpl?.canScheduleExactNotifications() ?? false
         : true;
 
-    await _plugin.zonedSchedule(
-      _idFor(planId),
-      'A few minutes with $textTitle?',
-      body,
-      _nextOccurrenceOf(hour, minute),
-      details,
-      androidScheduleMode: canExact
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
+    Future<void> schedule(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          _idFor(planId),
+          'A few minutes with $textTitle?',
+          body,
+          _nextOccurrenceOf(hour, minute),
+          details,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+
+    if (canExact) {
+      try {
+        await schedule(AndroidScheduleMode.exactAllowWhileIdle);
+      } catch (_) {
+        await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+      }
+    } else {
+      await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+    }
   }
 
   Future<void> cancelPlanReminder(String planId) async {

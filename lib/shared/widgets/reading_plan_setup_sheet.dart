@@ -240,7 +240,7 @@ class _SetupSheetState extends ConsumerState<_SetupSheet> {
                                   color: muted, fontSize: 11),
                             ),
                             Text(
-                              '$_unitsPerDay ${_unitLabel}s · ≈$_estimatedMins min',
+                              '$_unitsPerDay $_unitLabel · ≈$_estimatedMins min',
                               style: GoogleFonts.inter(
                                 color: fg,
                                 fontSize: 14,
@@ -375,6 +375,13 @@ class _SetupSheetState extends ConsumerState<_SetupSheet> {
       return;
     }
 
+    // Request permission while sheet is still mounted so the system dialog
+    // has a valid Activity context — calling it after pop can silently fail.
+    bool granted = false;
+    if (_reminderEnabled) {
+      granted = await NotificationService.instance.requestPermission();
+    }
+
     final plan = ReadingPlan.create(
       textId: text.id,
       textTitle: text.title,
@@ -387,24 +394,22 @@ class _SetupSheetState extends ConsumerState<_SetupSheet> {
     );
 
     ref.read(readingPlanProvider.notifier).addPlan(plan);
-    if (mounted) Navigator.of(context).pop();
 
-    if (_reminderEnabled) {
-      final granted = await NotificationService.instance.requestPermission();
-      if (granted) {
-        await NotificationService.instance.schedulePlanReminder(
-          planId: plan.id,
-          textTitle: plan.textTitle,
-          hour: plan.reminderHour,
-          minute: plan.reminderMinute,
-          dayNumber: plan.dayNumber,
-          durationDays: plan.durationDays,
-          unitsPerDay: plan.unitsPerDay,
-          unitLabel: plan.unitLabel,
-          estimatedMins: plan.estimatedMinutesPerDay,
-        );
-      }
+    if (_reminderEnabled && granted) {
+      await NotificationService.instance.schedulePlanReminder(
+        planId: plan.id,
+        textTitle: plan.textTitle,
+        hour: plan.reminderHour,
+        minute: plan.reminderMinute,
+        dayNumber: plan.dayNumber,
+        durationDays: plan.durationDays,
+        unitsPerDay: plan.unitsPerDay,
+        unitLabel: plan.unitLabel,
+        estimatedMins: plan.estimatedMinutesPerDay,
+      );
     }
+
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _showAlreadyExists(String title, String religionId) {
