@@ -9,6 +9,8 @@ import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
 import '../../providers/chat_provider.dart';
+import '../../providers/reading_plan_provider.dart';
+import '../../core/models/reading_plan.dart';
 import '../../data/user_repository.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
@@ -37,6 +39,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   String? _error;
   bool _showTranslation = true;
   bool _showTranslit = true;
+  bool _dismissedEndCard = false;
 
   @override
   void initState() {
@@ -119,7 +122,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _goTo(int num) async {
     final max = _meta!.totalChapters;
     if (num < 1 || num > max) return;
-    setState(() => _loading = true);
+    setState(() { _loading = true; _dismissedEndCard = false; });
     _currentChapter = num;
     try {
       if (_isPagedType) {
@@ -241,6 +244,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
     final accent = _meta != null ? ReligionColors.accent(_meta!.religionId) : AppColors.islamGreen;
 
+    final plan = ref.watch(readingPlanProvider).planForText(widget.textId);
+    final showEndCard = plan != null &&
+        !plan.todayDone &&
+        !_dismissedEndCard &&
+        _currentChapter >= plan.todayEndUnit;
+
     if (_error != null) {
       return Scaffold(
         backgroundColor: bg,
@@ -307,6 +316,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
             Divider(height: 1, color: line),
+            if (plan != null && !_loading)
+              _TodayBanner(plan: plan, accent: accent, fg: fg, muted: muted),
             Expanded(
               child: _loading
                   ? Center(child: CircularProgressIndicator(strokeWidth: 1.5, color: accent))
@@ -328,6 +339,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           ),
                         ),
             ),
+            if (showEndCard)
+              _EndCard(
+                plan: plan,
+                accent: accent,
+                fg: fg,
+                muted: muted,
+                line: line,
+                onMarkDone: () =>
+                    ref.read(readingPlanProvider.notifier).markTodayDone(plan.id),
+                onReadOn: () => setState(() => _dismissedEndCard = true),
+              ),
             Container(
               height: 52,
               decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: line))),
@@ -731,6 +753,157 @@ class _VerseCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+class _TodayBanner extends StatelessWidget {
+  const _TodayBanner({
+    required this.plan,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+  });
+
+  final ReadingPlan plan;
+  final Color accent, fg, muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.today_rounded, color: accent, size: 15),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TODAY · DAY ${plan.dayNumber}',
+                  style: GoogleFonts.jetBrainsMono(
+                      color: accent, fontSize: 8, letterSpacing: 1.5),
+                ),
+                Text(
+                  '${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                  style: GoogleFonts.inter(
+                      color: fg, fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          if (plan.todayDone)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '✓ DONE',
+                style: GoogleFonts.jetBrainsMono(color: accent, fontSize: 8),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EndCard extends StatelessWidget {
+  const _EndCard({
+    required this.plan,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onMarkDone,
+    required this.onReadOn,
+  });
+
+  final ReadingPlan plan;
+  final Color accent, fg, muted, line;
+  final VoidCallback onMarkDone, onReadOn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.06),
+        border: Border(top: BorderSide(color: accent.withValues(alpha: 0.2))),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🎉', style: TextStyle(fontSize: 24)),
+          const SizedBox(height: 8),
+          Text(
+            "Today's portion complete",
+            style: GoogleFonts.cormorantGaramond(
+              color: fg, fontSize: 18,
+              fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Day ${plan.dayNumber} · ${plan.unitLabel}s ${plan.todayStartUnit}–${plan.todayEndUnit}',
+            style: GoogleFonts.jetBrainsMono(color: muted, fontSize: 9, letterSpacing: 0.8),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: onReadOn,
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: line),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Read on →',
+                        style: GoogleFonts.inter(color: fg, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onMarkDone,
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '✓ Mark Day ${plan.dayNumber}',
+                        style: GoogleFonts.inter(
+                          color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DialogOption extends StatelessWidget {

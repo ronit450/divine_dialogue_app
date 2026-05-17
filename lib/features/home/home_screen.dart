@@ -6,10 +6,13 @@ import '../../providers/religion_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/history_provider.dart';
+import '../../providers/reading_plan_provider.dart';
+import '../../data/reading_plan_repository.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/chat_message.dart';
 import '../../data/texts_repository.dart';
 import '../../shared/widgets/religion_glyph.dart';
+import '../../shared/widgets/reading_plan_setup_sheet.dart';
 
 final _dailyVerseProvider = FutureProvider.autoDispose.family<DailyVerse, String>(
   (ref, religionId) => TextsRepository.instance.getDailyVerse(religionId),
@@ -47,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         if (mounted) setState(() => _chatStarted = true);
       }
       _consumePending();
+      Future.delayed(const Duration(seconds: 2), _maybeShowReadingPopup);
     });
   }
 
@@ -106,6 +110,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         curve: Curves.easeOut,
       );
     }
+  }
+
+  Future<void> _maybeShowReadingPopup() async {
+    if (!mounted) return;
+    final religion = ref.read(religionProvider).selectedReligion;
+    if (religion == null) return;
+    final plans = ref.read(readingPlanProvider).plans;
+    if (plans.any((p) => p.religionId == religion.id)) return;
+    final repo = ReadingPlanRepository.instance;
+    final should = await repo.shouldShowPopup();
+    if (!should || !mounted) return;
+    await repo.recordPopupShown();
+    if (!mounted) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.nightBg : AppColors.boneBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _ReadingPopup(
+        accent: ReligionColors.accent(religion.id),
+        isDark: isDark,
+      ),
+    );
   }
 
   void _startNewChat() {
@@ -1639,6 +1669,101 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
           color: widget.color,
           borderRadius: BorderRadius.circular(1),
         ),
+      ),
+    );
+  }
+}
+
+class _ReadingPopup extends StatelessWidget {
+  const _ReadingPopup({required this.accent, required this.isDark});
+  final Color accent;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: muted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.menu_book_outlined, color: accent, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'NEW · DAILY READING',
+            style: GoogleFonts.jetBrainsMono(
+              color: accent, fontSize: 10, letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'A little each day.',
+            style: GoogleFonts.cormorantGaramond(
+              color: fg, fontSize: 28,
+              fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Read scripture consistently. Pick any book and a time frame — we guide you to the right portion each day.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: muted, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 28),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).pop();
+              showReadingPlanSetupSheet(context);
+            },
+            child: Container(
+              height: 50, width: double.infinity,
+              decoration: BoxDecoration(
+                color: accent, borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  'Set up your plan',
+                  style: GoogleFonts.inter(
+                    color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              Navigator.of(context).pop();
+              await ReadingPlanRepository.instance.recordMaybeLater();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Maybe later',
+                style: GoogleFonts.inter(color: muted, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

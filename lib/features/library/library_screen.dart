@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
+import '../../providers/reading_plan_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
+import '../../core/models/reading_plan.dart';
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -14,6 +16,7 @@ class LibraryScreen extends ConsumerWidget {
     final state = ref.watch(religionProvider);
     final religions = state.religions;
     final selectedReligion = state.selectedReligion;
+    final planState = ref.watch(readingPlanProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -108,12 +111,26 @@ class LibraryScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _HeroTextCard(
-                  text: activeReligion.texts.first,
-                  religion: activeReligion,
-                  accent: accent,
-                  isSelected: activeReligion.texts.first.id == state.selectedText?.id,
-                ),
+                child: Builder(builder: (context) {
+                  final primaryText = activeReligion.texts.first;
+                  final plan = planState.planForText(primaryText.id);
+                  if (plan != null) {
+                    return _PlanHeroCard(
+                      plan: plan,
+                      text: primaryText,
+                      religion: activeReligion,
+                      accent: accent,
+                      fg: fg,
+                      muted: muted,
+                    );
+                  }
+                  return _HeroTextCard(
+                    text: primaryText,
+                    religion: activeReligion,
+                    accent: accent,
+                    isSelected: primaryText.id == state.selectedText?.id,
+                  );
+                }),
               ),
             ),
 
@@ -146,6 +163,7 @@ class LibraryScreen extends ConsumerWidget {
                         line: line,
                         surface: surface,
                         onTap: () => context.push('/read/${text.id}'),
+                        plan: planState.planForText(text.id),
                       ),
                     );
                   },
@@ -268,6 +286,144 @@ class _HeroTextCard extends StatelessWidget {
   }
 }
 
+class _PlanHeroCard extends StatelessWidget {
+  const _PlanHeroCard({
+    required this.plan,
+    required this.text,
+    required this.religion,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+  });
+
+  final ReadingPlan plan;
+  final SacredTextModel text;
+  final ReligionModel religion;
+  final Color accent, fg, muted;
+
+  String _watermarkGlyph(String id) => switch (id) {
+    'sikhism'      => 'ਆਦਿ ਸਚੁ',
+    'islam'        => 'الله',
+    'hinduism'     => 'ॐ',
+    'christianity' => '✝',
+    _ => '✦',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push(
+        '/read/${text.id}',
+        extra: {'chapter': plan.todayStartUnit},
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: accent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              right: -16, top: -12,
+              child: Text(
+                _watermarkGlyph(religion.id),
+                style: TextStyle(
+                  fontSize: 90,
+                  color: Colors.white.withValues(alpha: 0.08),
+                  fontFamily: 'serif',
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'ACTIVE PLAN',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 9, letterSpacing: 2,
+                      ),
+                    ),
+                    if (plan.streak > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🔥', style: TextStyle(fontSize: 9)),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${plan.streak}',
+                              style: GoogleFonts.jetBrainsMono(
+                                color: Colors.white,
+                                fontSize: 9, fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  text.title,
+                  style: GoogleFonts.cormorantGaramond(
+                    color: Colors.white, fontSize: 26,
+                    fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: plan.progressFraction,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    minHeight: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      plan.todayDone
+                          ? 'DAY ${plan.dayNumber} DONE ✓'
+                          : 'TODAY · ${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 9, letterSpacing: 1.2,
+                      ),
+                    ),
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TextListTile extends StatelessWidget {
   const _TextListTile({
     required this.text,
@@ -277,6 +433,7 @@ class _TextListTile extends StatelessWidget {
     required this.line,
     required this.surface,
     required this.onTap,
+    this.plan,
   });
 
   final SacredTextModel text;
@@ -286,6 +443,7 @@ class _TextListTile extends StatelessWidget {
   final Color line;
   final Color surface;
   final VoidCallback onTap;
+  final ReadingPlan? plan;
 
   String _abbrev(String title) {
     final words = title.split(' ').where((w) => w.isNotEmpty).toList();
@@ -334,6 +492,24 @@ class _TextListTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(text.description, style: GoogleFonts.inter(color: muted, fontSize: 12)),
+                  if (plan != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: plan!.progressFraction,
+                        backgroundColor: accent.withValues(alpha: 0.12),
+                        valueColor: AlwaysStoppedAnimation(accent),
+                        minHeight: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'DAY ${plan!.dayNumber} · ${plan!.percentRead}% READ',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: muted, fontSize: 8, letterSpacing: 0.5),
+                    ),
+                  ],
                 ],
               ),
             ),
