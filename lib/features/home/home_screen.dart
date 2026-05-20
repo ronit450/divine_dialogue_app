@@ -1342,93 +1342,49 @@ class _InputBarState extends State<_InputBar> {
     );
   }
 
-  Widget _buildRightButton() {
-    if (widget.voiceState == VoiceState.processing) {
-      return const SizedBox(key: ValueKey('processing-btn'), width: 44, height: 44);
-    }
-    if (widget.voiceState == VoiceState.recording ||
-        widget.voiceState == VoiceState.silenceError) {
-      return GestureDetector(
-        key: const ValueKey('voice-send'),
-        onTap: widget.onSend,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.accent,
-            boxShadow: [BoxShadow(color: widget.accent.withValues(alpha: 0.3), blurRadius: 10)],
-          ),
-          child: const Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 22),
-        ),
-      );
-    }
-    if (_hasText) {
-      return GestureDetector(
-        key: const ValueKey('send'),
-        onTap: widget.onSend,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.accent,
-            boxShadow: [BoxShadow(color: widget.accent.withValues(alpha: 0.3), blurRadius: 10)],
-          ),
-          child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
-        ),
-      );
-    }
-    if (!widget.isAiActive) {
-      return GestureDetector(
-        key: const ValueKey('mic'),
-        onTap: widget.onMicTap,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: widget.line),
-          ),
-          child: Icon(Icons.mic_rounded, color: widget.accent, size: 20),
-        ),
-      );
-    }
-    return Container(
-      key: const ValueKey('idle'),
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: widget.line),
-      ),
-      child: Icon(Icons.auto_awesome_outlined, color: widget.muted, size: 18),
-    );
-  }
-
   @override
   Widget build(BuildContext ctx) {
     final bottomPad = MediaQuery.of(ctx).padding.bottom;
+    final canSend = _hasText ||
+        widget.voiceState == VoiceState.recording ||
+        widget.voiceState == VoiceState.silenceError;
+    final micEnabled = !widget.isAiActive &&
+        widget.voiceState != VoiceState.processing;
+
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
       decoration: BoxDecoration(color: widget.bg),
       child: Row(
         children: [
-          if (_inVoiceMode) ...[
-            GestureDetector(
-              onTap: widget.onVoiceCancel,
-              child: Container(
-                width: 36,
-                height: 36,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: widget.accent.withValues(alpha: 0.5)),
+          // mic always on left; cancel in voice mode, start otherwise
+          GestureDetector(
+            onTap: micEnabled
+                ? (_inVoiceMode ? widget.onVoiceCancel : widget.onMicTap)
+                : null,
+            child: Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _inVoiceMode
+                    ? widget.accent.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: _inVoiceMode
+                      ? widget.accent.withValues(alpha: 0.5)
+                      : widget.line,
                 ),
-                child: Icon(Icons.mic_rounded, color: widget.accent, size: 18),
+              ),
+              child: Icon(
+                Icons.mic_rounded,
+                color: micEnabled
+                    ? (_inVoiceMode ? widget.accent : widget.muted)
+                    : widget.muted.withValues(alpha: 0.4),
+                size: 18,
               ),
             ),
-          ],
+          ),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
@@ -1437,12 +1393,60 @@ class _InputBarState extends State<_InputBar> {
               child: _buildInputArea(),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             transitionBuilder: (child, anim) =>
                 ScaleTransition(scale: anim, child: child),
-            child: _buildRightButton(),
+            child: widget.voiceState == VoiceState.processing
+                ? SizedBox(
+                    key: const ValueKey('proc'),
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(widget.accent),
+                        ),
+                      ),
+                    ),
+                  )
+                : GestureDetector(
+                    key: ValueKey(canSend),
+                    onTap: canSend ? widget.onSend : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: canSend ? widget.accent : Colors.transparent,
+                        border: canSend
+                            ? null
+                            : Border.all(color: widget.line),
+                        boxShadow: canSend
+                            ? [
+                                BoxShadow(
+                                  color: widget.accent.withValues(alpha: 0.3),
+                                  blurRadius: 10,
+                                )
+                              ]
+                            : null,
+                      ),
+                      child: Icon(
+                        (widget.voiceState == VoiceState.recording ||
+                                widget.voiceState == VoiceState.silenceError)
+                            ? Icons.graphic_eq_rounded
+                            : Icons.arrow_upward_rounded,
+                        color: canSend ? Colors.white : widget.muted,
+                        size: 20,
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
