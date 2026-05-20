@@ -40,7 +40,7 @@ class AssemblyAiService {
       body: jsonEncode({
         'audio_url': audioUrl,
         'language_code': languageCode,
-        'speech_model': 'best',
+        'speech_models': 'best',
       }),
     );
     if (response.statusCode != 200) {

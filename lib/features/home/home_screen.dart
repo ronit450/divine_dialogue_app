@@ -1293,10 +1293,25 @@ class _InputBarState extends State<_InputBar> {
 
   Widget _buildInputArea() {
     if (_inVoiceMode) {
+      final stream = widget.amplitudeStream;
+      if (stream == null) {
+        return Container(
+          key: const ValueKey('processing'),
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
+            ),
+          ),
+        );
+      }
       return _VoiceWaveform(
         key: const ValueKey('waveform'),
         accent: widget.accent,
-        amplitudeStream: widget.amplitudeStream!,
+        amplitudeStream: stream,
       );
     }
     final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
@@ -1344,7 +1359,7 @@ class _InputBarState extends State<_InputBar> {
             color: widget.accent,
             boxShadow: [BoxShadow(color: widget.accent.withValues(alpha: 0.3), blurRadius: 10)],
           ),
-          child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+          child: const Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 22),
         ),
       );
     }
@@ -1408,9 +1423,9 @@ class _InputBarState extends State<_InputBar> {
                 margin: const EdgeInsets.only(right: 8),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: widget.line),
+                  border: Border.all(color: widget.accent.withValues(alpha: 0.5)),
                 ),
-                child: Icon(Icons.close_rounded, color: widget.muted, size: 18),
+                child: Icon(Icons.mic_rounded, color: widget.accent, size: 18),
               ),
             ),
           ],
