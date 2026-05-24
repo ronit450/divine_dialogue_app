@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -243,6 +244,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     onDelete: () => ref
                         .read(historyProvider.notifier)
                         .deleteSession(filtered[i].id),
+                    onPin: () => ref
+                        .read(historyProvider.notifier)
+                        .pinSession(filtered[i].id),
+                    onRename: (title) => ref
+                        .read(historyProvider.notifier)
+                        .renameSession(filtered[i].id, title),
                     onExport: () => _exportSession(filtered[i]),
                   ),
                   childCount: filtered.length,
@@ -362,6 +369,8 @@ class _SessionTile extends StatelessWidget {
     required this.surface,
     required this.onTap,
     required this.onDelete,
+    required this.onPin,
+    required this.onRename,
     required this.onExport,
   });
 
@@ -373,6 +382,8 @@ class _SessionTile extends StatelessWidget {
   final Color surface;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback onPin;
+  final void Function(String) onRename;
   final VoidCallback onExport;
 
   @override
@@ -381,155 +392,213 @@ class _SessionTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Dismissible(
-        key: Key(session.id),
-        direction: DismissDirection.endToStart,
-        onDismissed: (_) => onDelete(),
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 20),
-          decoration: BoxDecoration(
-            color: Colors.red.shade400.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
+      child: RawGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          TapGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+            () => TapGestureRecognizer(),
+            (i) => i.onTap = onTap,
           ),
-          child: Icon(Icons.delete_outline_rounded,
-              color: Colors.red.shade400, size: 22),
-        ),
-        child: GestureDetector(
-          onTap: onTap,
-          onLongPress: () => _showOptions(context),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: line),
-              boxShadow: isDark
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+          LongPressGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+            () => LongPressGestureRecognizer(
+                duration: const Duration(milliseconds: 300)),
+            (i) => i.onLongPressStart =
+                (d) => _showContextMenu(context, d.globalPosition),
+          ),
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: session.isPinned
+                  ? fg.withValues(alpha: 0.3)
+                  : line,
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accent.withValues(alpha: 0.12),
-                  ),
-                  child: Center(
-                    child: Text(_symbol(session.religionId),
-                        style: const TextStyle(fontSize: 16)),
-                  ),
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.12),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        session.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            color: fg,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${session.messages.length} msg${session.messages.length == 1 ? '' : 's'} · ${_formatDate(session.updatedAt)}',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: muted,
-                            fontSize: 10,
-                            letterSpacing: 0.3),
-                      ),
-                    ],
-                  ),
+                child: Center(
+                  child: Text(_symbol(session.religionId),
+                      style: const TextStyle(fontSize: 16)),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded,
-                    size: 12, color: muted),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          color: fg,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${session.messages.length} msg${session.messages.length == 1 ? '' : 's'} · ${_formatDate(session.updatedAt)}',
+                      style: GoogleFonts.jetBrainsMono(
+                          color: muted,
+                          fontSize: 10,
+                          letterSpacing: 0.3),
+                    ),
+                  ],
+                ),
+              ),
+              if (session.isPinned) ...[
+                Icon(Icons.push_pin_rounded, size: 12, color: muted),
+                const SizedBox(width: 6),
               ],
-            ),
+              Icon(Icons.arrow_forward_ios_rounded, size: 12, color: muted),
+            ],
           ),
         ),
       ),
     );
   }
 
-  void _showOptions(BuildContext context) {
-    showModalBottomSheet<void>(
+  void _showContextMenu(BuildContext context, Offset position) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    showMenu<String>(
       context: context,
-      backgroundColor: surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(20)),
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 1, 1),
+        Offset.zero & overlay.size,
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: muted.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                session.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                    color: fg,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _OptionTile(
-              icon: Icons.open_in_new_rounded,
-              label: 'Open conversation',
-              color: fg,
-              onTap: () {
-                Navigator.pop(ctx);
-                onTap();
-              },
-            ),
-            _OptionTile(
-              icon: Icons.ios_share_rounded,
-              label: 'Export conversation',
-              color: fg,
-              onTap: () {
-                Navigator.pop(ctx);
-                onExport();
-              },
-            ),
-            _OptionTile(
-              icon: Icons.delete_outline_rounded,
-              label: 'Delete conversation',
-              color: Colors.red.shade400,
-              onTap: () {
-                Navigator.pop(ctx);
-                onDelete();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: surface,
+      elevation: 8,
+      items: [
+        PopupMenuItem(
+          value: 'rename',
+          child: _MenuRow(Icons.edit_outlined, 'Rename', fg),
         ),
+        PopupMenuItem(
+          value: 'pin',
+          child: _MenuRow(
+            session.isPinned
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
+            session.isPinned ? 'Unpin' : 'Pin to top',
+            fg,
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: _MenuRow(
+              Icons.delete_outline_rounded, 'Delete', Colors.red.shade400),
+        ),
+      ],
+    ).then((value) {
+      if (!context.mounted) return;
+      switch (value) {
+        case 'rename':
+          _showRenameDialog(context);
+        case 'pin':
+          onPin();
+        case 'delete':
+          _showDeleteDialog(context);
+      }
+    });
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final controller = TextEditingController(text: session.title);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Rename',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: GoogleFonts.inter(color: fg, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Conversation title',
+            hintStyle: GoogleFonts.inter(color: muted, fontSize: 14),
+          ),
+          onSubmitted: (v) {
+            final t = v.trim();
+            if (t.isNotEmpty) {
+              Navigator.pop(ctx);
+              onRename(t);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () {
+              final t = controller.text.trim();
+              if (t.isNotEmpty) {
+                Navigator.pop(ctx);
+                onRename(t);
+              }
+            },
+            child: Text('Save',
+                style: GoogleFonts.inter(
+                    color: fg, fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Delete conversation?',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: Text('This conversation will be permanently deleted.',
+            style: GoogleFonts.inter(color: muted, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete',
+                style: GoogleFonts.inter(
+                    color: Colors.red.shade400,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) onDelete();
+    });
   }
 
   String _symbol(String id) => switch (id) {
@@ -550,28 +619,24 @@ class _SessionTile extends StatelessWidget {
   }
 }
 
-class _OptionTile extends StatelessWidget {
-  const _OptionTile({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+class _MenuRow extends StatelessWidget {
+  const _MenuRow(this.icon, this.label, this.color);
   final IconData icon;
   final String label;
   final Color color;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: color, size: 20),
-      title: Text(
-        label,
-        style: GoogleFonts.inter(
-            color: color, fontSize: 14, fontWeight: FontWeight.w500),
-      ),
-      onTap: onTap,
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 12),
+        Text(label,
+            style: GoogleFonts.inter(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1069,7 +1070,19 @@ class _ChatDrawerState extends ConsumerState<_ChatDrawer> {
                           muted: widget.muted,
                           line: widget.line,
                           accent: widget.accent,
+                          surface: widget.isDark
+                              ? AppColors.nightSurface
+                              : Colors.white,
                           onTap: () => widget.onSessionTap(session),
+                          onPin: () => ref
+                              .read(historyProvider.notifier)
+                              .pinSession(session.id),
+                          onRename: (title) => ref
+                              .read(historyProvider.notifier)
+                              .renameSession(session.id, title),
+                          onDelete: () => ref
+                              .read(historyProvider.notifier)
+                              .deleteSession(session.id),
                         ),
                     ],
                   if (sessions.isEmpty)
@@ -1106,7 +1119,11 @@ class _SessionTile extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.accent,
+    required this.surface,
     required this.onTap,
+    required this.onPin,
+    required this.onRename,
+    required this.onDelete,
   });
 
   final ChatSession session;
@@ -1115,17 +1132,37 @@ class _SessionTile extends StatelessWidget {
   final Color muted;
   final Color line;
   final Color accent;
+  final Color surface;
   final VoidCallback onTap;
+  final VoidCallback onPin;
+  final void Function(String) onRename;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        TapGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+          () => TapGestureRecognizer(),
+          (i) => i.onTap = onTap,
+        ),
+        LongPressGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+          () => LongPressGestureRecognizer(
+              duration: const Duration(milliseconds: 300)),
+          (i) => i.onLongPressStart =
+              (d) => _showContextMenu(context, d.globalPosition),
+        ),
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         child: Row(
           children: [
-            Icon(Icons.chat_bubble_outline_rounded, size: 15, color: muted),
+            session.isPinned
+                ? Icon(Icons.push_pin_rounded, size: 13, color: muted)
+                : Icon(Icons.chat_bubble_outline_rounded, size: 15, color: muted),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1158,6 +1195,150 @@ class _SessionTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showContextMenu(BuildContext context, Offset position) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 1, 1),
+        Offset.zero & overlay.size,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: surface,
+      elevation: 8,
+      items: [
+        PopupMenuItem(
+          value: 'rename',
+          child: _MenuRow(Icons.edit_outlined, 'Rename', fg),
+        ),
+        PopupMenuItem(
+          value: 'pin',
+          child: _MenuRow(
+            session.isPinned
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
+            session.isPinned ? 'Unpin' : 'Pin to top',
+            fg,
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: _MenuRow(
+              Icons.delete_outline_rounded, 'Delete', Colors.red.shade400),
+        ),
+      ],
+    ).then((value) {
+      if (!context.mounted) return;
+      switch (value) {
+        case 'rename':
+          _showRenameDialog(context);
+        case 'pin':
+          onPin();
+        case 'delete':
+          _showDeleteDialog(context);
+      }
+    });
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final controller = TextEditingController(text: session.title);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Rename',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: GoogleFonts.inter(color: fg, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Conversation title',
+            hintStyle: GoogleFonts.inter(color: muted, fontSize: 14),
+          ),
+          onSubmitted: (v) {
+            final t = v.trim();
+            if (t.isNotEmpty) {
+              Navigator.pop(ctx);
+              onRename(t);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () {
+              final t = controller.text.trim();
+              if (t.isNotEmpty) {
+                Navigator.pop(ctx);
+                onRename(t);
+              }
+            },
+            child: Text('Save',
+                style: GoogleFonts.inter(
+                    color: fg, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Delete conversation?',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: Text('This conversation will be permanently deleted.',
+            style: GoogleFonts.inter(color: muted, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete',
+                style: GoogleFonts.inter(
+                    color: Colors.red.shade400,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) onDelete();
+    });
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow(this.icon, this.label, this.color);
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 12),
+        Text(label,
+            style: GoogleFonts.inter(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }

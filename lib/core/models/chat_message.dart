@@ -82,6 +82,7 @@ class ChatSession {
     required this.messages,
     required this.createdAt,
     required this.updatedAt,
+    this.isPinned = false,
   });
 
   final String id;
@@ -91,11 +92,13 @@ class ChatSession {
   final List<ChatMessage> messages;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isPinned;
 
   ChatSession copyWith({
     String? title,
     List<ChatMessage>? messages,
     DateTime? updatedAt,
+    bool? isPinned,
   }) => ChatSession(
     id: id,
     title: title ?? this.title,
@@ -104,6 +107,7 @@ class ChatSession {
     messages: messages ?? this.messages,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    isPinned: isPinned ?? this.isPinned,
   );
 
   Map<String, dynamic> toJson() => {
@@ -114,6 +118,7 @@ class ChatSession {
     'messages': messages.map((m) => m.toJson()).toList(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'isPinned': isPinned,
   };
 
   factory ChatSession.fromJson(Map<String, dynamic> json) => ChatSession(
@@ -126,6 +131,7 @@ class ChatSession {
         .toList(),
     createdAt: _parseDate(json['createdAt']),
     updatedAt: _parseDate(json['updatedAt']),
+    isPinned: (json['isPinned'] as bool?) ?? false,
   );
 
   static DateTime _parseDate(dynamic v) {
