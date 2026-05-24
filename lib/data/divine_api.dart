@@ -18,8 +18,9 @@ class ApiStreamPassage extends ApiStreamEvent {
 }
 
 class ApiStreamChunk extends ApiStreamEvent {
-  ApiStreamChunk(this.text);
+  ApiStreamChunk(this.text, {this.phase = 'answer'});
   final String text;
+  final String phase; // "preamble" | "answer"
 }
 
 class ApiStreamDone extends ApiStreamEvent {
@@ -125,7 +126,8 @@ class DivineApi {
         return ApiStreamPassage(_citationFromPassage(j));
       case 'text_delta':
         final text = j['text'] as String? ?? '';
-        return text.isNotEmpty ? ApiStreamChunk(text) : null;
+        final phase = j['phase'] as String? ?? 'answer';
+        return text.isNotEmpty ? ApiStreamChunk(text, phase: phase) : null;
       case 'done':
         final raw = j['answer'] as String? ?? '';
         final answer = raw.replaceAll(RegExp(r'<answer>|</answer>'), '').trim();

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -275,28 +276,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         (chatState.isTyping || chatState.isStreaming ? 1 : 0),
                     itemBuilder: (context, i) {
                       if (i == messages.length) {
-                        if (chatState.isStreaming) {
-                          return _StreamingBubble(
-                            text: chatState.streamingText,
-                            passageCount: chatState.streamingPassages.length,
-                            accent: accent,
-                            isDark: isDark,
-                            fg: fg,
-                            line: line,
-                          );
-                        }
-                        return _TypingIndicator(
+                        // In-progress turn — build an ephemeral ChatMessage
+                        // from streaming buffers so the agent bubble is the
+                        // same widget used after `done` commits.
+                        final inflight = ChatMessage(
+                          id: 'streaming',
+                          text: chatState.streamingText,
+                          isUser: false,
+                          timestamp: DateTime.now(),
+                          citations: chatState.streamingPassages,
+                          preamble: chatState.streamingPreamble,
+                          hasToolCall: chatState.hasToolCall,
+                        );
+                        return _AgentBubble(
+                          message: inflight,
+                          isStreaming: true,
+                          statusMessage: chatState.statusMessage,
                           accent: accent,
                           isDark: isDark,
+                          fg: fg,
+                          muted: muted,
                           line: line,
-                          statusMessage: chatState.statusMessage,
                         );
                       }
-                      return _MessageBubble(
-                        message: messages[i],
+                      final m = messages[i];
+                      if (m.isUser) {
+                        return _UserBubble(
+                          message: m,
+                          accent: accent,
+                        );
+                      }
+                      return _AgentBubble(
+                        message: m,
+                        isStreaming: false,
+                        statusMessage: '',
                         accent: accent,
                         isDark: isDark,
                         fg: fg,
+                        muted: muted,
                         line: line,
                       );
                     },
@@ -476,127 +493,217 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─── Message Bubble ──────────────────────────────────────────────────────────
+// ─── User Bubble ─────────────────────────────────────────────────────────────
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
+class _UserBubble extends StatelessWidget {
+  const _UserBubble({required this.message, required this.accent});
+
+  final ChatMessage message;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Text(
+                message.text,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Agent Bubble (unified streaming + committed) ────────────────────────────
+//
+// The spec calls for ONE bubble layout used for both the in-progress streaming
+// turn and every committed assistant turn — preamble (italic muted), tool-call
+// block (running / done), then the answer (Markdown). Passage cards render
+// outside / below the bubble. Layout must not change when `done` arrives.
+
+class _AgentBubble extends StatelessWidget {
+  const _AgentBubble({
     required this.message,
+    required this.isStreaming,
+    required this.statusMessage,
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
   });
 
   final ChatMessage message;
+  final bool isStreaming;
+  final String statusMessage;
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
-
-  void _showCitationsSheet(BuildContext context) {
-    final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
-    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => _CitationsSheet(
-        citations: message.citations,
-        accent: accent,
-        isDark: isDark,
-        fg: fg,
-        muted: muted,
-        line: line,
-        sheetBg: sheetBg,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    final hasCitations = !isUser && message.citations.isNotEmpty;
     final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+
+    final hasPreamble = message.preamble.isNotEmpty;
+    final hasAnswer = message.text.isNotEmpty;
+    final hasToolCall = message.hasToolCall;
+    final passages = message.citations;
+
+    // Tool-call block state:
+    //   running → still streaming AND answer hasn't started
+    //   done    → stream finished OR answer text has begun
+    final toolRunning =
+        hasToolCall && isStreaming && !hasAnswer;
+    final showLoadingDots =
+        isStreaming && !hasPreamble && !hasToolCall && !hasAnswer;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
-        crossAxisAlignment:
-            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment:
-                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isUser) ...[
-                Container(
-                  width: 28,
-                  height: 28,
-                  margin: const EdgeInsets.only(right: 8, bottom: 2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accent.withValues(alpha: 0.12),
-                    border: Border.all(
-                        color: accent.withValues(alpha: 0.25), width: 0.5),
-                  ),
-                  child:
-                      Icon(Icons.auto_stories_rounded, color: accent, size: 13),
+              Container(
+                width: 28,
+                height: 28,
+                margin: const EdgeInsets.only(right: 8, top: 2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.12),
+                  border: Border.all(
+                      color: accent.withValues(alpha: 0.25), width: 0.5),
                 ),
-              ],
+                child: Icon(Icons.auto_stories_rounded,
+                    color: accent, size: 13),
+              ),
               Flexible(
                 child: Container(
                   constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      maxWidth:
+                          MediaQuery.of(context).size.width * 0.78),
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                   decoration: BoxDecoration(
-                    color: isUser ? accent : aiBg,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(isUser ? 16 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    color: aiBg,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(16),
                     ),
-                    border: isUser ? null : Border.all(color: line, width: 1),
+                    border: Border.all(color: line, width: 1),
                   ),
-                  child: Text(
-                    message.text,
-                    style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : fg,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Layer 1 — Preamble (italic, muted; persists after done)
+                      if (hasPreamble) ...[
+                        Text(
+                          message.preamble,
+                          style: GoogleFonts.inter(
+                            color: muted,
+                            fontStyle: FontStyle.italic,
+                            fontSize: 13,
+                            height: 1.55,
+                          ),
+                        ),
+                        if (hasToolCall || hasAnswer)
+                          const SizedBox(height: 10),
+                      ],
+
+                      // Layer 2 — Tool-call block (running spinner / done check)
+                      if (hasToolCall) ...[
+                        _ToolCallBlock(
+                          isRunning: toolRunning,
+                          passageCount: passages.length,
+                          statusMessage: statusMessage,
+                          accent: accent,
+                          isDark: isDark,
+                          muted: muted,
+                          line: line,
+                        ),
+                        if (hasAnswer) const SizedBox(height: 10),
+                      ],
+
+                      // Layer 3 — Answer (Markdown; streams in; blinking cursor
+                      // while streaming).
+                      if (hasAnswer)
+                        _AnswerBody(
+                          text: message.text,
+                          fg: fg,
+                          accent: accent,
+                          showCursor: isStreaming,
+                        ),
+
+                      // Initial loading dots — only when nothing has streamed yet
+                      if (showLoadingDots) _LoadingDots(color: muted),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          if (hasCitations) ...[
-            const SizedBox(height: 6),
+
+          // Passage cards — below the bubble, indented to align with the body
+          if (passages.isNotEmpty) ...[
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.only(left: 36),
-              child: GestureDetector(
-                onTap: () => _showCitationsSheet(context),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.menu_book_rounded, size: 12, color: accent),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${message.citations.length} source${message.citations.length > 1 ? 's' : ''}',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: accent,
-                        fontSize: 10,
-                        letterSpacing: 0.5,
-                        fontWeight: FontWeight.w500,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'REFERENCED PASSAGES',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: muted,
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...passages.map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PassageCard(
+                        citation: p,
+                        accent: accent,
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                        line: line,
                       ),
                     ),
-                    const SizedBox(width: 3),
-                    Icon(Icons.open_in_new_rounded, size: 9, color: accent),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -606,111 +713,139 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-// ─── Citations Sheet ─────────────────────────────────────────────────────────
+// ─── Answer body — Markdown + optional blinking cursor ───────────────────────
 
-class _CitationsSheet extends StatelessWidget {
-  const _CitationsSheet({
-    required this.citations,
-    required this.accent,
-    required this.isDark,
+class _AnswerBody extends StatelessWidget {
+  const _AnswerBody({
+    required this.text,
     required this.fg,
-    required this.muted,
-    required this.line,
-    required this.sheetBg,
+    required this.accent,
+    required this.showCursor,
   });
 
-  final List<Citation> citations;
-  final Color accent;
-  final bool isDark;
+  final String text;
   final Color fg;
-  final Color muted;
-  final Color line;
-  final Color sheetBg;
+  final Color accent;
+  final bool showCursor;
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.62,
-      minChildSize: 0.35,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: sheetBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    final body = MarkdownBody(
+      data: text,
+      softLineBreak: true,
+      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+        p: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.55),
+        strong:
+            GoogleFonts.inter(color: fg, fontSize: 14, fontWeight: FontWeight.w600),
+        em: GoogleFonts.inter(
+            color: fg, fontSize: 14, fontStyle: FontStyle.italic),
+        listBullet: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+        blockquote: GoogleFonts.inter(
+          color: fg.withValues(alpha: 0.85),
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
         ),
-        child: Column(
+        code: GoogleFonts.jetBrainsMono(color: fg, fontSize: 12.5),
+      ),
+    );
+    if (!showCursor) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        body,
+        Row(
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12, bottom: 4),
-                decoration: BoxDecoration(
-                  color: line,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: accent.withValues(alpha: 0.1),
-                    ),
-                    child: Icon(Icons.menu_book_rounded, color: accent, size: 14),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'SCRIPTURE REFERENCES',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: accent,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${citations.length} passage${citations.length > 1 ? 's' : ''}',
-                    style: GoogleFonts.inter(color: muted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Divider(color: line, height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: citations.length,
-                itemBuilder: (_, i) => _CitationCard(
-                  citation: citations[i],
-                  accent: accent,
-                  isDark: isDark,
-                  fg: fg,
-                  line: line,
-                ),
-              ),
-            ),
+            const SizedBox(height: 14),
+            _BlinkingCursor(color: accent),
           ],
         ),
+      ],
+    );
+  }
+}
+
+// ─── Tool-call block ─────────────────────────────────────────────────────────
+
+class _ToolCallBlock extends StatelessWidget {
+  const _ToolCallBlock({
+    required this.isRunning,
+    required this.passageCount,
+    required this.statusMessage,
+    required this.accent,
+    required this.isDark,
+    required this.muted,
+    required this.line,
+  });
+
+  final bool isRunning;
+  final int passageCount;
+  final String statusMessage;
+  final Color accent;
+  final bool isDark;
+  final Color muted;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) {
+    final doneColor = const Color(0xFF2E9D5C);
+    final blockBg = (isDark ? AppColors.nightBg : AppColors.boneBg)
+        .withValues(alpha: isDark ? 0.6 : 1.0);
+    final borderColor = isRunning ? line : doneColor.withValues(alpha: 0.6);
+    final fgColor = isRunning ? muted : doneColor;
+
+    final label = isRunning
+        ? (statusMessage.isNotEmpty ? statusMessage : 'Searching…')
+        : 'Found $passageCount passage${passageCount == 1 ? '' : 's'}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: blockBg,
+        border: Border.all(color: borderColor, width: 0.8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isRunning)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(muted),
+              ),
+            )
+          else
+            Icon(Icons.check_rounded, size: 14, color: doneColor),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: fgColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CitationCard extends StatelessWidget {
-  const _CitationCard({
+// ─── Passage card (rendered below the bubble) ────────────────────────────────
+
+class _PassageCard extends StatelessWidget {
+  const _PassageCard({
     required this.citation,
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
   });
 
@@ -718,6 +853,7 @@ class _CitationCard extends StatelessWidget {
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
 
   @override
@@ -727,12 +863,11 @@ class _CitationCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withValues(alpha: 0.3), width: 0.8),
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,26 +876,28 @@ class _CitationCard extends StatelessWidget {
             children: [
               Container(
                 width: 3,
-                height: 14,
+                height: 12,
                 decoration: BoxDecoration(
                   color: accent,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                citation.reference.toUpperCase(),
-                style: GoogleFonts.jetBrainsMono(
-                  color: accent,
-                  fontSize: 9,
-                  letterSpacing: 1.4,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  citation.reference,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: accent,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
           if (hasOriginal) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Directionality(
               textDirection:
                   citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
@@ -768,29 +905,78 @@ class _CitationCard extends StatelessWidget {
                 citation.originalText,
                 style: TextStyle(
                   color: fg,
-                  fontSize: citation.isRtl ? 19 : 15,
-                  height: citation.isRtl ? 2.2 : 1.7,
+                  fontSize: citation.isRtl ? 18 : 14,
+                  height: citation.isRtl ? 2.0 : 1.6,
                   fontWeight: FontWeight.w400,
-                  fontFamily: citation.isRtl ? null : 'serif',
                 ),
                 textAlign:
                     citation.isRtl ? TextAlign.right : TextAlign.left,
               ),
             ),
-            const SizedBox(height: 10),
-            Divider(color: line, height: 1),
           ],
-          const SizedBox(height: 10),
-          Text(
-            '"${citation.translation}"',
-            style: GoogleFonts.cormorantGaramond(
-              color: fg.withValues(alpha: 0.8),
-              fontSize: 14,
-              fontStyle: FontStyle.italic,
-              height: 1.55,
+          if (citation.translation.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              citation.translation,
+              style: GoogleFonts.inter(
+                color: muted,
+                fontSize: 13,
+                height: 1.55,
+              ),
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// ─── Loading dots (initial pre-preamble state) ───────────────────────────────
+
+class _LoadingDots extends StatefulWidget {
+  const _LoadingDots({required this.color});
+  final Color color;
+
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final opacity = ((_ctrl.value * 3 - i) % 1).clamp(0.25, 1.0);
+          return Padding(
+            padding: EdgeInsets.only(right: i == 2 ? 0 : 4),
+            child: Opacity(
+              opacity: opacity,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color,
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -866,109 +1052,6 @@ class _VerseBanner extends StatelessWidget {
   }
 }
 
-// ─── Streaming Bubble ────────────────────────────────────────────────────────
-
-class _StreamingBubble extends StatelessWidget {
-  const _StreamingBubble({
-    required this.text,
-    required this.passageCount,
-    required this.accent,
-    required this.isDark,
-    required this.fg,
-    required this.line,
-  });
-
-  final String text;
-  final int passageCount;
-  final Color accent;
-  final bool isDark;
-  final Color fg;
-  final Color line;
-
-  @override
-  Widget build(BuildContext context) {
-    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.only(right: 8, bottom: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accent.withValues(alpha: 0.12),
-              border:
-                  Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
-            ),
-            child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
-          ),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: aiBg,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(4),
-                      bottomRight: Radius.circular(16),
-                    ),
-                    border: Border.all(color: line, width: 1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          text,
-                          style:
-                              GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      _BlinkingCursor(color: accent),
-                    ],
-                  ),
-                ),
-                if (passageCount > 0) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.menu_book_rounded, size: 11, color: accent),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$passageCount passage${passageCount > 1 ? 's' : ''} found',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: accent,
-                          fontSize: 9,
-                          letterSpacing: 0.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── Blinking Cursor ─────────────────────────────────────────────────────────
 
 class _BlinkingCursor extends StatefulWidget {
@@ -1010,105 +1093,6 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
           color: widget.color,
           borderRadius: BorderRadius.circular(1),
         ),
-      ),
-    );
-  }
-}
-
-// ─── Typing Indicator ────────────────────────────────────────────────────────
-
-class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator({
-    required this.accent,
-    required this.isDark,
-    required this.line,
-    this.statusMessage = '',
-  });
-  final Color accent;
-  final bool isDark;
-  final Color line;
-  final String statusMessage;
-
-  @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
-}
-
-class _TypingIndicatorState extends State<_TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final aiBg = widget.isDark ? AppColors.nightSurface : AppColors.boneSurface;
-    final dotColor = widget.isDark ? AppColors.nightMuted : AppColors.boneMuted;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.only(right: 8, bottom: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.accent.withValues(alpha: 0.12),
-            ),
-            child: Icon(Icons.auto_stories_rounded, color: widget.accent, size: 13),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: aiBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: widget.line, width: 1),
-            ),
-            child: widget.statusMessage.isNotEmpty
-                ? FadeTransition(
-                    opacity: _anim,
-                    child: Text(
-                      widget.statusMessage,
-                      style: GoogleFonts.inter(
-                        color: dotColor,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  )
-                : FadeTransition(
-                    opacity: _anim,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(
-                        3,
-                        (i) => Container(
-                          width: 6,
-                          height: 6,
-                          margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                          decoration: BoxDecoration(
-                              shape: BoxShape.circle, color: dotColor),
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        ],
       ),
     );
   }

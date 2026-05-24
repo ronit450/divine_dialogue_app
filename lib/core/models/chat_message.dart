@@ -36,6 +36,8 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.citations = const [],
+    this.preamble = '',
+    this.hasToolCall = false,
   });
 
   final String id;
@@ -43,6 +45,8 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final List<Citation> citations;
+  final String preamble;
+  final bool hasToolCall;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -50,6 +54,8 @@ class ChatMessage {
     'isUser': isUser,
     'timestamp': timestamp.toIso8601String(),
     'citations': citations.map((c) => c.toJson()).toList(),
+    'preamble': preamble,
+    'hasToolCall': hasToolCall,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -62,6 +68,8 @@ class ChatMessage {
             ? Citation.referenceOnly(c)
             : Citation.fromJson(c as Map<String, dynamic>))
         .toList(),
+    preamble: (json['preamble'] as String?) ?? '',
+    hasToolCall: (json['hasToolCall'] as bool?) ?? false,
   );
 }
 
