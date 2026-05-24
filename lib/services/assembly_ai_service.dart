@@ -39,8 +39,8 @@ class AssemblyAiService {
       },
       body: jsonEncode({
         'audio_url': audioUrl,
+        'speech_models': ['universal-3-pro', 'universal-2'],
         'language_code': languageCode,
-        'speech_models': 'best',
       }),
     );
     if (response.statusCode != 200) {
