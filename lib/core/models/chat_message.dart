@@ -36,6 +36,8 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.citations = const [],
+    this.preamble = '',
+    this.hasToolCall = false,
   });
 
   final String id;
@@ -43,6 +45,8 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final List<Citation> citations;
+  final String preamble;
+  final bool hasToolCall;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -50,6 +54,8 @@ class ChatMessage {
     'isUser': isUser,
     'timestamp': timestamp.toIso8601String(),
     'citations': citations.map((c) => c.toJson()).toList(),
+    'preamble': preamble,
+    'hasToolCall': hasToolCall,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -62,6 +68,8 @@ class ChatMessage {
             ? Citation.referenceOnly(c)
             : Citation.fromJson(c as Map<String, dynamic>))
         .toList(),
+    preamble: (json['preamble'] as String?) ?? '',
+    hasToolCall: (json['hasToolCall'] as bool?) ?? false,
   );
 }
 
@@ -74,6 +82,7 @@ class ChatSession {
     required this.messages,
     required this.createdAt,
     required this.updatedAt,
+    this.isPinned = false,
   });
 
   final String id;
@@ -83,11 +92,13 @@ class ChatSession {
   final List<ChatMessage> messages;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isPinned;
 
   ChatSession copyWith({
     String? title,
     List<ChatMessage>? messages,
     DateTime? updatedAt,
+    bool? isPinned,
   }) => ChatSession(
     id: id,
     title: title ?? this.title,
@@ -96,6 +107,7 @@ class ChatSession {
     messages: messages ?? this.messages,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    isPinned: isPinned ?? this.isPinned,
   );
 
   Map<String, dynamic> toJson() => {
@@ -106,6 +118,7 @@ class ChatSession {
     'messages': messages.map((m) => m.toJson()).toList(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'isPinned': isPinned,
   };
 
   factory ChatSession.fromJson(Map<String, dynamic> json) => ChatSession(
@@ -118,6 +131,7 @@ class ChatSession {
         .toList(),
     createdAt: _parseDate(json['createdAt']),
     updatedAt: _parseDate(json['updatedAt']),
+    isPinned: (json['isPinned'] as bool?) ?? false,
   );
 
   static DateTime _parseDate(dynamic v) {

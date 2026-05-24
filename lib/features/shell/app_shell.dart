@@ -57,15 +57,21 @@ class _AppShellState extends ConsumerState<AppShell>
     final accent = state.selectedReligion?.accentColor ?? AppColors.islamGreen;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: FadeTransition(opacity: _fadeAnim, child: widget.shell),
-      bottomNavigationBar: _NavBar(
-        currentIndex: widget.shell.currentIndex,
-        accent: accent,
-        isDark: isDark,
-        onTap: (i) => widget.shell.goBranch(
-          i,
-          initialLocation: i == widget.shell.currentIndex,
+    return PopScope(
+      canPop: widget.shell.currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) widget.shell.goBranch(0);
+      },
+      child: Scaffold(
+        body: FadeTransition(opacity: _fadeAnim, child: widget.shell),
+        bottomNavigationBar: _NavBar(
+          currentIndex: widget.shell.currentIndex,
+          accent: accent,
+          isDark: isDark,
+          onTap: (i) => widget.shell.goBranch(
+            i,
+            initialLocation: i == widget.shell.currentIndex,
+          ),
         ),
       ),
     );

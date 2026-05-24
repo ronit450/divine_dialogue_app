@@ -1,11 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/chat_message.dart';
+import '../../services/assembly_ai_service.dart';
+import 'voice/voice_recorder.dart';
+
+enum VoiceState { idle, recording, silenceError, processing }
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -17,6 +25,12 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _voiceRecorder = VoiceRecorder();
+
+  VoiceState _voiceState = VoiceState.idle;
+  StreamSubscription<Amplitude>? _ampSub;
+  Timer? _silenceTimer;
+  DateTime? _lastSoundTime;
 
   @override
   void initState() {
@@ -37,7 +51,125 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _controller.dispose();
     _scrollCtrl.dispose();
+    _ampSub?.cancel();
+    _silenceTimer?.cancel();
+    _voiceRecorder.dispose();
     super.dispose();
+  }
+
+  String _languageCode() {
+    final religion = ref.read(religionProvider).selectedReligion;
+    if (religion == null) return 'ur';
+    switch (religion.id) {
+      case 'islam':
+        return 'ur';
+      case 'hinduism':
+        return 'hi';
+      default:
+        return 'ur';
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      if (status.isPermanentlyDenied && mounted) _showMicPermissionDialog();
+      return;
+    }
+    try {
+      await _voiceRecorder.start();
+      _lastSoundTime = DateTime.now();
+      _ampSub = _voiceRecorder.amplitudeStream.listen(_onAmplitude);
+      _silenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_lastSoundTime != null &&
+            DateTime.now().difference(_lastSoundTime!).inSeconds >= 10 &&
+            _voiceState == VoiceState.recording) {
+          setState(() => _voiceState = VoiceState.silenceError);
+        }
+      });
+      setState(() => _voiceState = VoiceState.recording);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start recording: $e')),
+        );
+      }
+    }
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    if (amp.current > -40) {
+      _lastSoundTime = DateTime.now();
+      if (_voiceState == VoiceState.silenceError) {
+        setState(() => _voiceState = VoiceState.recording);
+      }
+    }
+  }
+
+  Future<void> _cancelVoice() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.idle);
+    try {
+      await _voiceRecorder.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _stopAndTranscribe() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.processing);
+    try {
+      final path = await _voiceRecorder.stop();
+      final langCode = _languageCode();
+      final text = await AssemblyAiService.instance
+          .transcribe(path, languageCode: langCode);
+      if (text.isNotEmpty && mounted) {
+        ref.read(chatProvider.notifier).sendMessage(text);
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transcription failed: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _voiceState = VoiceState.idle);
+    }
+  }
+
+  void _showMicPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Microphone Permission'),
+        content: const Text(
+          'Microphone access is required for voice input. '
+          'Please enable it in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startNewChat() {
@@ -54,6 +186,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _send() {
+    if (_voiceState == VoiceState.recording ||
+        _voiceState == VoiceState.silenceError) {
+      _stopAndTranscribe();
+      return;
+    }
+    if (_voiceState == VoiceState.processing) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
@@ -97,7 +235,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chatState = ref.watch(chatProvider);
     final religionState = ref.watch(religionProvider);
     final religion = religionState.selectedReligion;
-    final accent = religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
+    final accent =
+        religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -106,6 +245,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
 
     final messages = chatState.session?.messages ?? [];
+    final isAiActive = chatState.isTyping || chatState.isStreaming;
 
     return Scaffold(
       backgroundColor: bg,
@@ -123,7 +263,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Expanded(
             child: messages.isEmpty
-                ? _EmptyState(accent: accent, religion: religion?.name, fg: fg, muted: muted)
+                ? _EmptyState(
+                    accent: accent,
+                    religion: religion?.name,
+                    fg: fg,
+                    muted: muted,
+                  )
                 : ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -131,22 +276,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         (chatState.isTyping || chatState.isStreaming ? 1 : 0),
                     itemBuilder: (context, i) {
                       if (i == messages.length) {
-                        if (chatState.isStreaming) {
-                          return _StreamingBubble(
-                            text: chatState.streamingText,
-                            accent: accent,
-                            isDark: isDark,
-                            fg: fg,
-                            line: line,
-                          );
-                        }
-                        return _TypingIndicator(accent: accent, isDark: isDark, line: line);
+                        // In-progress turn — build an ephemeral ChatMessage
+                        // from streaming buffers so the agent bubble is the
+                        // same widget used after `done` commits.
+                        final inflight = ChatMessage(
+                          id: 'streaming',
+                          text: chatState.streamingText,
+                          isUser: false,
+                          timestamp: DateTime.now(),
+                          citations: chatState.streamingPassages,
+                          preamble: chatState.streamingPreamble,
+                          hasToolCall: chatState.hasToolCall,
+                        );
+                        return _AgentBubble(
+                          message: inflight,
+                          isStreaming: true,
+                          statusMessage: chatState.statusMessage,
+                          accent: accent,
+                          isDark: isDark,
+                          fg: fg,
+                          muted: muted,
+                          line: line,
+                        );
                       }
-                      return _MessageBubble(
-                        message: messages[i],
+                      final m = messages[i];
+                      if (m.isUser) {
+                        return _UserBubble(
+                          message: m,
+                          accent: accent,
+                        );
+                      }
+                      return _AgentBubble(
+                        message: m,
+                        isStreaming: false,
+                        statusMessage: '',
                         accent: accent,
                         isDark: isDark,
                         fg: fg,
+                        muted: muted,
                         line: line,
                       );
                     },
@@ -159,7 +326,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               fg: fg,
               muted: muted,
               line: line,
-              onDismiss: () => ref.read(chatProvider.notifier).clearPendingVerse(),
+              onDismiss: () =>
+                  ref.read(chatProvider.notifier).clearPendingVerse(),
             ),
           _InputBar(
             controller: _controller,
@@ -170,12 +338,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             muted: muted,
             line: line,
             bg: bg,
+            voiceState: _voiceState,
+            onMicTap: _startRecording,
+            onVoiceCancel: _cancelVoice,
+            isAiActive: isAiActive,
+            amplitudeStream: (_voiceState == VoiceState.recording ||
+                    _voiceState == VoiceState.silenceError)
+                ? _voiceRecorder.amplitudeStream
+                : null,
           ),
         ],
       ),
     );
   }
 }
+
+// ─── App Bar ────────────────────────────────────────────────────────────────
 
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const _ChatAppBar({
@@ -230,18 +408,23 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Text(
               title,
               style: GoogleFonts.cormorantGaramond(
-                color: fg, fontSize: 20, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                color: fg,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                fontStyle: FontStyle.italic,
               ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
-            icon: Icon(Icons.history_rounded, color: fg.withValues(alpha: 0.6), size: 20),
+            icon: Icon(Icons.history_rounded,
+                color: fg.withValues(alpha: 0.6), size: 20),
             onPressed: onHistory,
             tooltip: 'History',
           ),
           IconButton(
-            icon: Icon(Icons.add_comment_outlined, color: accent, size: 20),
+            icon:
+                Icon(Icons.add_comment_outlined, color: accent, size: 20),
             onPressed: onNewChat,
             tooltip: 'New chat',
           ),
@@ -250,6 +433,8 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+// ─── Empty State ─────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({
@@ -284,10 +469,15 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              religion != null ? 'Ask anything about $religion' : 'Start a conversation',
+              religion != null
+                  ? 'Ask anything about $religion'
+                  : 'Start a conversation',
               textAlign: TextAlign.center,
               style: GoogleFonts.cormorantGaramond(
-                color: fg, fontSize: 20, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                color: fg,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                fontStyle: FontStyle.italic,
               ),
             ),
             const SizedBox(height: 8),
@@ -303,124 +493,217 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
+// ─── User Bubble ─────────────────────────────────────────────────────────────
+
+class _UserBubble extends StatelessWidget {
+  const _UserBubble({required this.message, required this.accent});
+
+  final ChatMessage message;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Text(
+                message.text,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Agent Bubble (unified streaming + committed) ────────────────────────────
+//
+// The spec calls for ONE bubble layout used for both the in-progress streaming
+// turn and every committed assistant turn — preamble (italic muted), tool-call
+// block (running / done), then the answer (Markdown). Passage cards render
+// outside / below the bubble. Layout must not change when `done` arrives.
+
+class _AgentBubble extends StatelessWidget {
+  const _AgentBubble({
     required this.message,
+    required this.isStreaming,
+    required this.statusMessage,
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
   });
 
   final ChatMessage message;
+  final bool isStreaming;
+  final String statusMessage;
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
-
-  void _showCitationsSheet(BuildContext context) {
-    final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
-    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => _CitationsSheet(
-        citations: message.citations,
-        accent: accent,
-        isDark: isDark,
-        fg: fg,
-        muted: muted,
-        line: line,
-        sheetBg: sheetBg,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    final hasCitations = !isUser && message.citations.isNotEmpty;
     final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+
+    final hasPreamble = message.preamble.isNotEmpty;
+    final hasAnswer = message.text.isNotEmpty;
+    final hasToolCall = message.hasToolCall;
+    final passages = message.citations;
+
+    // Tool-call block state:
+    //   running → still streaming AND answer hasn't started
+    //   done    → stream finished OR answer text has begun
+    final toolRunning =
+        hasToolCall && isStreaming && !hasAnswer;
+    final showLoadingDots =
+        isStreaming && !hasPreamble && !hasToolCall && !hasAnswer;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
-        crossAxisAlignment:
-            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment:
-                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isUser) ...[
-                Container(
-                  width: 28,
-                  height: 28,
-                  margin: const EdgeInsets.only(right: 8, bottom: 2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accent.withValues(alpha: 0.12),
-                    border: Border.all(
-                        color: accent.withValues(alpha: 0.25), width: 0.5),
-                  ),
-                  child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
+              Container(
+                width: 28,
+                height: 28,
+                margin: const EdgeInsets.only(right: 8, top: 2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.12),
+                  border: Border.all(
+                      color: accent.withValues(alpha: 0.25), width: 0.5),
                 ),
-              ],
+                child: Icon(Icons.auto_stories_rounded,
+                    color: accent, size: 13),
+              ),
               Flexible(
                 child: Container(
                   constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      maxWidth:
+                          MediaQuery.of(context).size.width * 0.78),
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                   decoration: BoxDecoration(
-                    color: isUser ? accent : aiBg,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(isUser ? 16 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    color: aiBg,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(16),
                     ),
-                    border: isUser ? null : Border.all(color: line, width: 1),
+                    border: Border.all(color: line, width: 1),
                   ),
-                  child: Text(
-                    message.text,
-                    style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : fg,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Layer 1 — Preamble (italic, muted; persists after done)
+                      if (hasPreamble) ...[
+                        Text(
+                          message.preamble,
+                          style: GoogleFonts.inter(
+                            color: muted,
+                            fontStyle: FontStyle.italic,
+                            fontSize: 13,
+                            height: 1.55,
+                          ),
+                        ),
+                        if (hasToolCall || hasAnswer)
+                          const SizedBox(height: 10),
+                      ],
+
+                      // Layer 2 — Tool-call block (running spinner / done check)
+                      if (hasToolCall) ...[
+                        _ToolCallBlock(
+                          isRunning: toolRunning,
+                          passageCount: passages.length,
+                          statusMessage: statusMessage,
+                          accent: accent,
+                          isDark: isDark,
+                          muted: muted,
+                          line: line,
+                        ),
+                        if (hasAnswer) const SizedBox(height: 10),
+                      ],
+
+                      // Layer 3 — Answer (Markdown; streams in; blinking cursor
+                      // while streaming).
+                      if (hasAnswer)
+                        _AnswerBody(
+                          text: message.text,
+                          fg: fg,
+                          accent: accent,
+                          showCursor: isStreaming,
+                        ),
+
+                      // Initial loading dots — only when nothing has streamed yet
+                      if (showLoadingDots) _LoadingDots(color: muted),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          if (hasCitations) ...[
-            const SizedBox(height: 6),
+
+          // Passage cards — below the bubble, indented to align with the body
+          if (passages.isNotEmpty) ...[
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.only(left: 36),
-              child: GestureDetector(
-                onTap: () => _showCitationsSheet(context),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.menu_book_rounded, size: 12, color: accent),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${message.citations.length} source${message.citations.length > 1 ? 's' : ''}',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: accent,
-                        fontSize: 10,
-                        letterSpacing: 0.5,
-                        fontWeight: FontWeight.w500,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'REFERENCED PASSAGES',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: muted,
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...passages.map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PassageCard(
+                        citation: p,
+                        accent: accent,
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                        line: line,
                       ),
                     ),
-                    const SizedBox(width: 3),
-                    Icon(Icons.open_in_new_rounded, size: 9, color: accent),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -430,109 +713,139 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _CitationsSheet extends StatelessWidget {
-  const _CitationsSheet({
-    required this.citations,
-    required this.accent,
-    required this.isDark,
+// ─── Answer body — Markdown + optional blinking cursor ───────────────────────
+
+class _AnswerBody extends StatelessWidget {
+  const _AnswerBody({
+    required this.text,
     required this.fg,
-    required this.muted,
-    required this.line,
-    required this.sheetBg,
+    required this.accent,
+    required this.showCursor,
   });
 
-  final List<Citation> citations;
-  final Color accent;
-  final bool isDark;
+  final String text;
   final Color fg;
-  final Color muted;
-  final Color line;
-  final Color sheetBg;
+  final Color accent;
+  final bool showCursor;
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.62,
-      minChildSize: 0.35,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: sheetBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    final body = MarkdownBody(
+      data: text,
+      softLineBreak: true,
+      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+        p: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.55),
+        strong:
+            GoogleFonts.inter(color: fg, fontSize: 14, fontWeight: FontWeight.w600),
+        em: GoogleFonts.inter(
+            color: fg, fontSize: 14, fontStyle: FontStyle.italic),
+        listBullet: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
+        blockquote: GoogleFonts.inter(
+          color: fg.withValues(alpha: 0.85),
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
         ),
-        child: Column(
+        code: GoogleFonts.jetBrainsMono(color: fg, fontSize: 12.5),
+      ),
+    );
+    if (!showCursor) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        body,
+        Row(
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12, bottom: 4),
-                decoration: BoxDecoration(
-                  color: line,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: accent.withValues(alpha: 0.1),
-                    ),
-                    child: Icon(Icons.menu_book_rounded, color: accent, size: 14),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'SCRIPTURE REFERENCES',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: accent,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${citations.length} passage${citations.length > 1 ? 's' : ''}',
-                    style: GoogleFonts.inter(color: muted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Divider(color: line, height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: citations.length,
-                itemBuilder: (_, i) => _CitationCard(
-                  citation: citations[i],
-                  accent: accent,
-                  isDark: isDark,
-                  fg: fg,
-                  line: line,
-                ),
-              ),
-            ),
+            const SizedBox(height: 14),
+            _BlinkingCursor(color: accent),
           ],
         ),
+      ],
+    );
+  }
+}
+
+// ─── Tool-call block ─────────────────────────────────────────────────────────
+
+class _ToolCallBlock extends StatelessWidget {
+  const _ToolCallBlock({
+    required this.isRunning,
+    required this.passageCount,
+    required this.statusMessage,
+    required this.accent,
+    required this.isDark,
+    required this.muted,
+    required this.line,
+  });
+
+  final bool isRunning;
+  final int passageCount;
+  final String statusMessage;
+  final Color accent;
+  final bool isDark;
+  final Color muted;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) {
+    final doneColor = const Color(0xFF2E9D5C);
+    final blockBg = (isDark ? AppColors.nightBg : AppColors.boneBg)
+        .withValues(alpha: isDark ? 0.6 : 1.0);
+    final borderColor = isRunning ? line : doneColor.withValues(alpha: 0.6);
+    final fgColor = isRunning ? muted : doneColor;
+
+    final label = isRunning
+        ? (statusMessage.isNotEmpty ? statusMessage : 'Searching…')
+        : 'Found $passageCount passage${passageCount == 1 ? '' : 's'}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: blockBg,
+        border: Border.all(color: borderColor, width: 0.8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isRunning)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(muted),
+              ),
+            )
+          else
+            Icon(Icons.check_rounded, size: 14, color: doneColor),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: fgColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CitationCard extends StatelessWidget {
-  const _CitationCard({
+// ─── Passage card (rendered below the bubble) ────────────────────────────────
+
+class _PassageCard extends StatelessWidget {
+  const _PassageCard({
     required this.citation,
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
   });
 
@@ -540,6 +853,7 @@ class _CitationCard extends StatelessWidget {
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
 
   @override
@@ -549,12 +863,11 @@ class _CitationCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withValues(alpha: 0.3), width: 0.8),
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,58 +876,113 @@ class _CitationCard extends StatelessWidget {
             children: [
               Container(
                 width: 3,
-                height: 14,
+                height: 12,
                 decoration: BoxDecoration(
                   color: accent,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                citation.reference.toUpperCase(),
-                style: GoogleFonts.jetBrainsMono(
-                  color: accent,
-                  fontSize: 9,
-                  letterSpacing: 1.4,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  citation.reference,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: accent,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
           if (hasOriginal) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Directionality(
-              textDirection: citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
+              textDirection:
+                  citation.isRtl ? TextDirection.rtl : TextDirection.ltr,
               child: Text(
                 citation.originalText,
                 style: TextStyle(
                   color: fg,
-                  fontSize: citation.isRtl ? 19 : 15,
-                  height: citation.isRtl ? 2.2 : 1.7,
+                  fontSize: citation.isRtl ? 18 : 14,
+                  height: citation.isRtl ? 2.0 : 1.6,
                   fontWeight: FontWeight.w400,
-                  fontFamily: citation.isRtl ? null : 'serif',
                 ),
-                textAlign: citation.isRtl ? TextAlign.right : TextAlign.left,
+                textAlign:
+                    citation.isRtl ? TextAlign.right : TextAlign.left,
               ),
             ),
-            const SizedBox(height: 10),
-            Divider(color: line, height: 1),
           ],
-          const SizedBox(height: 10),
-          Text(
-            '“${citation.translation}”',
-            style: GoogleFonts.cormorantGaramond(
-              color: fg.withValues(alpha: 0.8),
-              fontSize: 14,
-              fontStyle: FontStyle.italic,
-              height: 1.55,
+          if (citation.translation.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              citation.translation,
+              style: GoogleFonts.inter(
+                color: muted,
+                fontSize: 13,
+                height: 1.55,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
+
+// ─── Loading dots (initial pre-preamble state) ───────────────────────────────
+
+class _LoadingDots extends StatefulWidget {
+  const _LoadingDots({required this.color});
+  final Color color;
+
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final opacity = ((_ctrl.value * 3 - i) % 1).clamp(0.25, 1.0);
+          return Padding(
+            padding: EdgeInsets.only(right: i == 2 ? 0 : 4),
+            child: Opacity(
+              opacity: opacity,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color,
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ─── Verse Banner ────────────────────────────────────────────────────────────
 
 class _VerseBanner extends StatelessWidget {
   const _VerseBanner({
@@ -658,14 +1026,17 @@ class _VerseBanner extends StatelessWidget {
                 Text(
                   verseContext.reference.toUpperCase(),
                   style: GoogleFonts.jetBrainsMono(
-                    fontSize: 8, color: accent, letterSpacing: 1.2,
+                    fontSize: 8,
+                    color: accent,
+                    letterSpacing: 1.2,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   preview,
-                  style: GoogleFonts.inter(fontSize: 11, color: muted, height: 1.4),
+                  style: GoogleFonts.inter(
+                      fontSize: 11, color: muted, height: 1.4),
                 ),
               ],
             ),
@@ -681,77 +1052,7 @@ class _VerseBanner extends StatelessWidget {
   }
 }
 
-class _StreamingBubble extends StatelessWidget {
-  const _StreamingBubble({
-    required this.text,
-    required this.accent,
-    required this.isDark,
-    required this.fg,
-    required this.line,
-  });
-
-  final String text;
-  final Color accent;
-  final bool isDark;
-  final Color fg;
-  final Color line;
-
-  @override
-  Widget build(BuildContext context) {
-    final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.only(right: 8, bottom: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accent.withValues(alpha: 0.12),
-              border: Border.all(color: accent.withValues(alpha: 0.25), width: 0.5),
-            ),
-            child: Icon(Icons.auto_stories_rounded, color: accent, size: 13),
-          ),
-          Flexible(
-            child: Container(
-              constraints:
-                  BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: aiBg,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(16),
-                ),
-                border: Border.all(color: line, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Flexible(
-                    child: Text(
-                      text,
-                      style: GoogleFonts.inter(color: fg, fontSize: 14, height: 1.5),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  _BlinkingCursor(color: accent),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ─── Blinking Cursor ─────────────────────────────────────────────────────────
 
 class _BlinkingCursor extends StatefulWidget {
   const _BlinkingCursor({required this.color});
@@ -797,82 +1098,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   }
 }
 
-class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator({required this.accent, required this.isDark, required this.line});
-  final Color accent;
-  final bool isDark;
-  final Color line;
-
-  @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
-}
-
-class _TypingIndicatorState extends State<_TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final aiBg = widget.isDark ? AppColors.nightSurface : AppColors.boneSurface;
-    final dotColor = widget.isDark ? AppColors.nightMuted : AppColors.boneMuted;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.only(right: 8, bottom: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.accent.withValues(alpha: 0.12),
-            ),
-            child: Icon(Icons.auto_stories_rounded, color: widget.accent, size: 13),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: aiBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: widget.line, width: 1),
-            ),
-            child: FadeTransition(
-              opacity: _anim,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  3,
-                  (i) => Container(
-                    width: 6,
-                    height: 6,
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ─── Input Bar ───────────────────────────────────────────────────────────────
 
 class _InputBar extends StatefulWidget {
   const _InputBar({
@@ -884,6 +1110,11 @@ class _InputBar extends StatefulWidget {
     required this.muted,
     required this.line,
     required this.bg,
+    required this.voiceState,
+    required this.onMicTap,
+    required this.onVoiceCancel,
+    required this.isAiActive,
+    this.amplitudeStream,
   });
 
   final TextEditingController controller;
@@ -894,6 +1125,11 @@ class _InputBar extends StatefulWidget {
   final Color muted;
   final Color line;
   final Color bg;
+  final VoiceState voiceState;
+  final VoidCallback onMicTap;
+  final VoidCallback onVoiceCancel;
+  final bool isAiActive;
+  final Stream<Amplitude>? amplitudeStream;
 
   @override
   State<_InputBar> createState() => _InputBarState();
@@ -919,10 +1155,14 @@ class _InputBarState extends State<_InputBar> {
     if (hasText != _hasText) setState(() => _hasText = hasText);
   }
 
+  bool get _inVoiceMode => widget.voiceState != VoiceState.idle;
+  bool get _isProcessing => widget.voiceState == VoiceState.processing;
+  bool get _isSilenceError => widget.voiceState == VoiceState.silenceError;
+
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
+    final surface = widget.isDark ? AppColors.nightSurface : Colors.white;
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
@@ -930,72 +1170,489 @@ class _InputBarState extends State<_InputBar> {
         color: widget.bg,
         border: Border(top: BorderSide(color: widget.line, width: 0.5)),
       ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: anim, child: child),
+            child: _inVoiceMode
+                ? _buildRecordingPill(surface)
+                : _buildTextPill(surface),
+          ),
+          if (_inVoiceMode && !_isProcessing) ...[
+            const SizedBox(height: 8),
+            _buildCaption(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextPill(Color surface) {
+    return AnimatedContainer(
+      key: const ValueKey('text-pill'),
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: widget.line),
+        boxShadow: _hasText
+            ? [
+                BoxShadow(
+                  color: widget.accent.withValues(alpha: 0.33),
+                  blurRadius: 40,
+                  offset: const Offset(0, 12),
+                ),
+              ]
+            : [],
+      ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: fieldBg,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: widget.line),
-              ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 18),
               child: TextField(
                 controller: widget.controller,
-                style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
+                style: GoogleFonts.inter(color: widget.fg, fontSize: 15),
                 maxLines: 4,
                 minLines: 1,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => widget.onSend(),
                 decoration: InputDecoration(
-                  hintText: 'Ask about the text…',
+                  hintText: 'Ask anything…',
                   hintStyle:
-                      GoogleFonts.inter(color: widget.muted, fontSize: 14),
+                      GoogleFonts.inter(color: widget.muted, fontSize: 15),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
-            child: _hasText
-                ? GestureDetector(
-                    key: const ValueKey('send'),
-                    onTap: widget.onSend,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: widget.accent,
-                        boxShadow: [
-                          BoxShadow(
-                              color: widget.accent.withValues(alpha: 0.3),
-                              blurRadius: 10),
-                        ],
-                      ),
-                      child: const Icon(Icons.arrow_upward_rounded,
-                          color: Colors.white, size: 20),
+          const SizedBox(width: 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 5, 5, 5),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: _hasText
+                  ? _pillButton(
+                      key: const ValueKey('send'),
+                      onTap: widget.onSend,
+                      icon: Icons.arrow_upward_rounded,
+                    )
+                  : _pillButton(
+                      key: const ValueKey('mic'),
+                      onTap: widget.onMicTap,
+                      icon: Icons.mic_rounded,
                     ),
-                  )
-                : Container(
-                    key: const ValueKey('idle'),
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: widget.line),
-                    ),
-                    child: Icon(Icons.auto_awesome_outlined,
-                        color: widget.muted, size: 18),
-                  ),
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _pillButton({
+    required Key key,
+    required VoidCallback onTap,
+    required IconData icon,
+  }) {
+    return _PressButton(
+      key: key,
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.accent,
+          boxShadow: [
+            BoxShadow(
+              color: widget.accent.withValues(alpha: 0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildRecordingPill(Color surface) {
+    return Container(
+      key: const ValueKey('recording-pill'),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: _isSilenceError ? Colors.orange.shade400 : widget.line,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: widget.accent.withValues(alpha: 0.20),
+            blurRadius: 40,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Trash cancel
+          GestureDetector(
+            onTap: _isProcessing ? null : widget.onVoiceCancel,
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isProcessing
+                    ? widget.line.withValues(alpha: 0.5)
+                    : (widget.isDark
+                        ? const Color(0xFFff5a50).withValues(alpha: 0.16)
+                        : const Color(0xFFfbeaea)),
+              ),
+              child: Icon(
+                Icons.delete_outline_rounded,
+                size: 16,
+                color: _isProcessing
+                    ? widget.muted
+                    : (widget.isDark
+                        ? const Color(0xFFff8a82)
+                        : const Color(0xFFc0392b)),
+              ),
+            ),
+          ),
+          // Center: waveform / silence warning / spinner
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _buildRecordingCenter(),
+            ),
+          ),
+          // Send
+          GestureDetector(
+            onTap: _isProcessing ? null : widget.onSend,
+            child: Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.fromLTRB(0, 6, 6, 6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isProcessing ? widget.line : widget.accent,
+                boxShadow: _isProcessing
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: widget.accent.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+              ),
+              child: const Icon(
+                Icons.arrow_upward_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingCenter() {
+    if (_isProcessing) {
+      return Padding(
+        key: const ValueKey('processing'),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Transcribing…',
+              style: GoogleFonts.inter(color: widget.muted, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_isSilenceError) {
+      return Padding(
+        key: const ValueKey('silence'),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Icon(Icons.mic_off_rounded, size: 14, color: Colors.orange.shade400),
+            const SizedBox(width: 6),
+            Text(
+              'Speak or tap send',
+              style: GoogleFonts.inter(
+                color: Colors.orange.shade400,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _VoiceWaveform(
+      key: const ValueKey('waveform'),
+      accent: widget.accent,
+      amplitudeStream: widget.amplitudeStream!,
+    );
+  }
+
+  Widget _buildCaption() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.delete_outline_rounded, size: 11, color: widget.muted),
+        const SizedBox(width: 4),
+        Text(
+          'Recording — tap trash to cancel · max 5:00',
+          style: GoogleFonts.inter(
+            color: widget.muted,
+            fontSize: 11,
+            fontStyle: FontStyle.italic,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Voice Waveform ──────────────────────────────────────────────────────────
+
+class _VoiceWaveform extends StatefulWidget {
+  const _VoiceWaveform({
+    super.key,
+    required this.accent,
+    required this.amplitudeStream,
+  });
+
+  final Color accent;
+  final Stream<Amplitude> amplitudeStream;
+
+  @override
+  State<_VoiceWaveform> createState() => _VoiceWaveformState();
+}
+
+class _VoiceWaveformState extends State<_VoiceWaveform> {
+  static const _barCount = 32;
+  final List<double> _bars = List.filled(_barCount, 0.0);
+  StreamSubscription<Amplitude>? _ampSub;
+  StreamSubscription<int>? _timerSub;
+  int _seconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ampSub = widget.amplitudeStream.listen(_onAmplitude);
+    _timerSub = Stream.periodic(const Duration(seconds: 1), (i) => i + 1)
+        .listen((s) {
+      if (mounted) setState(() => _seconds = s);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ampSub?.cancel();
+    _timerSub?.cancel();
+    super.dispose();
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    final normalized = ((amp.current + 60) / 60).clamp(0.0, 1.0);
+    if (mounted) {
+      setState(() {
+        _bars.removeAt(0);
+        _bars.add(normalized);
+      });
+    }
+  }
+
+  String get _timeLabel {
+    final m = _seconds ~/ 60;
+    final s = _seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          const _PulsingDot(),
+          const SizedBox(width: 8),
+          Text(
+            _timeLabel,
+            style: GoogleFonts.jetBrainsMono(
+              color: widget.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: CustomPaint(
+              painter:
+                  _WaveformPainter(bars: List.of(_bars), color: widget.accent),
+              size: const Size(double.infinity, 28),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Pulsing Dot ─────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, _) {
+        final t = Curves.easeOut.transform(_ctrl.value);
+        return Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFd44545),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFd44545).withValues(alpha: (1 - t) * 0.55),
+                blurRadius: 8 * t,
+                spreadRadius: 4 * t,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PressButton extends StatefulWidget {
+  const _PressButton({super.key, required this.onTap, required this.child});
+  final VoidCallback onTap;
+  final Widget child;
+  @override
+  State<_PressButton> createState() => _PressButtonState();
+}
+
+class _PressButtonState extends State<_PressButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 110));
+    _scale = Tween<double>(begin: 1.0, end: 0.86)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    );
+  }
+}
+
+// ─── Waveform Painter ────────────────────────────────────────────────────────
+
+class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.bars, required this.color});
+
+  final List<double> bars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barW = 2.0;
+    const gap = 2.5;
+    const step = barW + gap;
+    final minH = size.height * 0.12;
+    final maxH = size.height;
+    final paint = Paint()..strokeCap = StrokeCap.round;
+
+    final totalW = bars.length * step - gap;
+    var x = (size.width - totalW) / 2;
+
+    for (final bar in bars) {
+      final h = minH + bar * (maxH - minH);
+      final top = (size.height - h) / 2;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, top, barW, h),
+        const Radius.circular(1),
+      );
+      paint.color = color.withValues(alpha: 0.25 + bar * 0.75);
+      canvas.drawRRect(rect, paint);
+      x += step;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) => true;
 }

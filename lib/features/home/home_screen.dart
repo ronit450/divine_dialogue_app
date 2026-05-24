@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/chat_provider.dart';
@@ -13,6 +17,10 @@ import '../../core/models/chat_message.dart';
 import '../../data/texts_repository.dart';
 import '../../shared/widgets/religion_glyph.dart';
 import '../../shared/widgets/reading_plan_setup_sheet.dart';
+import '../../services/assembly_ai_service.dart';
+import '../chat/voice/voice_recorder.dart';
+
+enum VoiceState { idle, recording, silenceError, processing }
 
 final _dailyVerseProvider = FutureProvider.autoDispose.family<DailyVerse, String>(
   (ref, religionId) => TextsRepository.instance.getDailyVerse(religionId),
@@ -28,9 +36,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _voiceRecorder = VoiceRecorder();
   bool _chatStarted = false;
   GoRouter? _router;
   String _lastRoute = '/home';
+  VoiceState _voiceState = VoiceState.idle;
+  StreamSubscription<Amplitude>? _ampSub;
+  Timer? _silenceTimer;
+  DateTime? _lastSoundTime;
 
   static String _weekday(int d) =>
       const ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][d - 1];
@@ -60,6 +73,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _router?.routerDelegate.removeListener(_onRouteChanged);
     _controller.dispose();
     _scrollCtrl.dispose();
+    _ampSub?.cancel();
+    _silenceTimer?.cancel();
+    _voiceRecorder.dispose();
     super.dispose();
   }
 
@@ -100,6 +116,106 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!_chatStarted) setState(() => _chatStarted = true);
     ref.read(chatProvider.notifier).sendMessage(text);
     Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+  }
+
+  String _languageCode() {
+    final religion = ref.read(religionProvider).selectedReligion;
+    if (religion == null) return 'ur';
+    switch (religion.id) {
+      case 'islam': return 'ur';
+      case 'hinduism': return 'hi';
+      default: return 'ur';
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      if (status.isPermanentlyDenied && mounted) _showMicPermissionDialog();
+      return;
+    }
+    try {
+      await _voiceRecorder.start();
+      _lastSoundTime = DateTime.now();
+      _ampSub = _voiceRecorder.amplitudeStream.listen(_onAmplitude);
+      _silenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_lastSoundTime != null &&
+            DateTime.now().difference(_lastSoundTime!).inSeconds >= 10 &&
+            _voiceState == VoiceState.recording) {
+          setState(() => _voiceState = VoiceState.silenceError);
+        }
+      });
+      setState(() => _voiceState = VoiceState.recording);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start recording: $e')),
+        );
+      }
+    }
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    if (amp.current > -40) {
+      _lastSoundTime = DateTime.now();
+      if (_voiceState == VoiceState.silenceError) {
+        setState(() => _voiceState = VoiceState.recording);
+      }
+    }
+  }
+
+  Future<void> _cancelVoice() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.idle);
+    try { await _voiceRecorder.stop(); } catch (_) {}
+  }
+
+  Future<void> _stopAndTranscribe() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    setState(() => _voiceState = VoiceState.processing);
+    try {
+      final path = await _voiceRecorder.stop();
+      if (path.isEmpty) { setState(() => _voiceState = VoiceState.idle); return; }
+      final text = await AssemblyAiService.instance.transcribe(path, languageCode: _languageCode());
+      if (mounted && text.isNotEmpty) {
+        _controller.text = text;
+        if (!_chatStarted) setState(() => _chatStarted = true);
+        ref.read(chatProvider.notifier).sendMessage(text);
+        _controller.clear();
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Transcription failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _voiceState = VoiceState.idle);
+    }
+  }
+
+  void _showMicPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Microphone Permission'),
+        content: const Text(
+          'Microphone access is required for voice input. '
+          'Please enable it in app settings.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () { Navigator.pop(context); openAppSettings(); }, child: const Text('Settings')),
+        ],
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -285,12 +401,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             _InputBar(
               controller: _controller,
               accent: accent,
-              onSend: _send,
+              onSend: _voiceState == VoiceState.recording || _voiceState == VoiceState.silenceError
+                  ? _stopAndTranscribe
+                  : _send,
               isDark: isDark,
               fg: fg,
               muted: muted,
               line: line,
               bg: bg,
+              voiceState: _voiceState,
+              onMicTap: _startRecording,
+              onVoiceCancel: _cancelVoice,
+              isAiActive: chatState.isTyping || chatState.isStreaming,
+              amplitudeStream: (_voiceState == VoiceState.recording ||
+                      _voiceState == VoiceState.silenceError)
+                  ? _voiceRecorder.amplitudeStream
+                  : null,
             ),
           ],
         ),
@@ -944,7 +1070,19 @@ class _ChatDrawerState extends ConsumerState<_ChatDrawer> {
                           muted: widget.muted,
                           line: widget.line,
                           accent: widget.accent,
+                          surface: widget.isDark
+                              ? AppColors.nightSurface
+                              : Colors.white,
                           onTap: () => widget.onSessionTap(session),
+                          onPin: () => ref
+                              .read(historyProvider.notifier)
+                              .pinSession(session.id),
+                          onRename: (title) => ref
+                              .read(historyProvider.notifier)
+                              .renameSession(session.id, title),
+                          onDelete: () => ref
+                              .read(historyProvider.notifier)
+                              .deleteSession(session.id),
                         ),
                     ],
                   if (sessions.isEmpty)
@@ -981,7 +1119,11 @@ class _SessionTile extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.accent,
+    required this.surface,
     required this.onTap,
+    required this.onPin,
+    required this.onRename,
+    required this.onDelete,
   });
 
   final ChatSession session;
@@ -990,17 +1132,37 @@ class _SessionTile extends StatelessWidget {
   final Color muted;
   final Color line;
   final Color accent;
+  final Color surface;
   final VoidCallback onTap;
+  final VoidCallback onPin;
+  final void Function(String) onRename;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        TapGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+          () => TapGestureRecognizer(),
+          (i) => i.onTap = onTap,
+        ),
+        LongPressGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+          () => LongPressGestureRecognizer(
+              duration: const Duration(milliseconds: 300)),
+          (i) => i.onLongPressStart =
+              (d) => _showContextMenu(context, d.globalPosition),
+        ),
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         child: Row(
           children: [
-            Icon(Icons.chat_bubble_outline_rounded, size: 15, color: muted),
+            session.isPinned
+                ? Icon(Icons.push_pin_rounded, size: 13, color: muted)
+                : Icon(Icons.chat_bubble_outline_rounded, size: 15, color: muted),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1033,6 +1195,150 @@ class _SessionTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showContextMenu(BuildContext context, Offset position) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 1, 1),
+        Offset.zero & overlay.size,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: surface,
+      elevation: 8,
+      items: [
+        PopupMenuItem(
+          value: 'rename',
+          child: _MenuRow(Icons.edit_outlined, 'Rename', fg),
+        ),
+        PopupMenuItem(
+          value: 'pin',
+          child: _MenuRow(
+            session.isPinned
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
+            session.isPinned ? 'Unpin' : 'Pin to top',
+            fg,
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: _MenuRow(
+              Icons.delete_outline_rounded, 'Delete', Colors.red.shade400),
+        ),
+      ],
+    ).then((value) {
+      if (!context.mounted) return;
+      switch (value) {
+        case 'rename':
+          _showRenameDialog(context);
+        case 'pin':
+          onPin();
+        case 'delete':
+          _showDeleteDialog(context);
+      }
+    });
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final controller = TextEditingController(text: session.title);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Rename',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: GoogleFonts.inter(color: fg, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Conversation title',
+            hintStyle: GoogleFonts.inter(color: muted, fontSize: 14),
+          ),
+          onSubmitted: (v) {
+            final t = v.trim();
+            if (t.isNotEmpty) {
+              Navigator.pop(ctx);
+              onRename(t);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () {
+              final t = controller.text.trim();
+              if (t.isNotEmpty) {
+                Navigator.pop(ctx);
+                onRename(t);
+              }
+            },
+            child: Text('Save',
+                style: GoogleFonts.inter(
+                    color: fg, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        title: Text('Delete conversation?',
+            style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
+        content: Text('This conversation will be permanently deleted.',
+            style: GoogleFonts.inter(color: muted, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete',
+                style: GoogleFonts.inter(
+                    color: Colors.red.shade400,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) onDelete();
+    });
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow(this.icon, this.label, this.color);
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 12),
+        Text(label,
+            style: GoogleFonts.inter(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
@@ -1119,6 +1425,11 @@ class _InputBar extends StatefulWidget {
     required this.muted,
     required this.line,
     required this.bg,
+    required this.voiceState,
+    required this.onMicTap,
+    required this.onVoiceCancel,
+    required this.isAiActive,
+    this.amplitudeStream,
   });
 
   final TextEditingController controller;
@@ -1129,6 +1440,11 @@ class _InputBar extends StatefulWidget {
   final Color muted;
   final Color line;
   final Color bg;
+  final VoiceState voiceState;
+  final VoidCallback onMicTap;
+  final VoidCallback onVoiceCancel;
+  final bool isAiActive;
+  final Stream<Amplitude>? amplitudeStream;
 
   @override
   State<_InputBar> createState() => _InputBarState();
@@ -1154,67 +1470,365 @@ class _InputBarState extends State<_InputBar> {
     if (hasText != _hasText) setState(() => _hasText = hasText);
   }
 
+  bool get _inVoiceMode => widget.voiceState != VoiceState.idle;
+  bool get _isProcessing => widget.voiceState == VoiceState.processing;
+  bool get _isSilenceError => widget.voiceState == VoiceState.silenceError;
+
   @override
-  Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-    final fieldBg = widget.isDark ? AppColors.nightSurface : Colors.white;
+  Widget build(BuildContext ctx) {
+    final bottomPad = MediaQuery.of(ctx).padding.bottom;
+    final surface = widget.isDark ? AppColors.nightSurface : Colors.white;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
       decoration: BoxDecoration(color: widget.bg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: anim, child: child),
+            child: _inVoiceMode
+                ? _buildRecordingPill(surface)
+                : _buildTextPill(surface),
+          ),
+          if (_inVoiceMode && !_isProcessing) ...[
+            const SizedBox(height: 8),
+            _buildCaption(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextPill(Color surface) {
+    return AnimatedContainer(
+      key: const ValueKey('text-pill'),
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: widget.line),
+        boxShadow: _hasText
+            ? [
+                BoxShadow(
+                  color: widget.accent.withValues(alpha: 0.33),
+                  blurRadius: 40,
+                  offset: const Offset(0, 12),
+                ),
+              ]
+            : [],
+      ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: fieldBg,
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: widget.line.withValues(alpha: 0.5)),
-              ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 18),
               child: TextField(
                 controller: widget.controller,
-                style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
+                style: GoogleFonts.inter(color: widget.fg, fontSize: 15),
                 maxLines: 4,
                 minLines: 1,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => widget.onSend(),
                 cursorColor: widget.accent,
                 decoration: InputDecoration(
-                  hintText: 'Type a message…',
+                  hintText: 'Ask anything…',
                   hintStyle:
-                      GoogleFonts.inter(color: widget.muted, fontSize: 14),
+                      GoogleFonts.inter(color: widget.muted, fontSize: 15),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 5, 5, 5),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: _hasText
+                  ? _pillButton(
+                      key: const ValueKey('send'),
+                      onTap: widget.onSend,
+                      icon: Icons.arrow_upward_rounded,
+                    )
+                  : _pillButton(
+                      key: const ValueKey('mic'),
+                      onTap: widget.onMicTap,
+                      icon: Icons.mic_rounded,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pillButton({
+    required Key key,
+    required VoidCallback onTap,
+    required IconData icon,
+  }) {
+    return _PressButton(
+      key: key,
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.accent,
+          boxShadow: [
+            BoxShadow(
+              color: widget.accent.withValues(alpha: 0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildRecordingPill(Color surface) {
+    return Container(
+      key: const ValueKey('recording-pill'),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: _isSilenceError ? Colors.orange.shade400 : widget.line,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: widget.accent.withValues(alpha: 0.20),
+            blurRadius: 40,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Trash cancel
           GestureDetector(
-            onTap: _hasText ? widget.onSend : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 44,
+            onTap: _isProcessing ? null : widget.onVoiceCancel,
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _hasText
-                    ? widget.accent
-                    : widget.accent.withValues(alpha: 0.25),
-                boxShadow: _hasText
-                    ? [
-                        BoxShadow(
-                          color: widget.accent.withValues(alpha: 0.3),
-                          blurRadius: 10,
-                        ),
-                      ]
-                    : null,
+                color: _isProcessing
+                    ? widget.line.withValues(alpha: 0.5)
+                    : (widget.isDark
+                        ? const Color(0xFFff5a50).withValues(alpha: 0.16)
+                        : const Color(0xFFfbeaea)),
               ),
-              child: const Icon(Icons.arrow_upward_rounded,
-                  color: Colors.white, size: 20),
+              child: Icon(
+                Icons.delete_outline_rounded,
+                size: 16,
+                color: _isProcessing
+                    ? widget.muted
+                    : (widget.isDark
+                        ? const Color(0xFFff8a82)
+                        : const Color(0xFFc0392b)),
+              ),
+            ),
+          ),
+          // Center: waveform / silence warning / spinner
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _buildRecordingCenter(),
+            ),
+          ),
+          // Send
+          GestureDetector(
+            onTap: _isProcessing ? null : widget.onSend,
+            child: Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.fromLTRB(0, 6, 6, 6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isProcessing ? widget.line : widget.accent,
+                boxShadow: _isProcessing
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: widget.accent.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+              ),
+              child: const Icon(
+                Icons.arrow_upward_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingCenter() {
+    if (_isProcessing) {
+      return Padding(
+        key: const ValueKey('processing'),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Transcribing…',
+              style: GoogleFonts.inter(color: widget.muted, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_isSilenceError) {
+      return Padding(
+        key: const ValueKey('silence'),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Icon(Icons.mic_off_rounded, size: 14, color: Colors.orange.shade400),
+            const SizedBox(width: 6),
+            Text(
+              'Speak or tap send',
+              style: GoogleFonts.inter(
+                color: Colors.orange.shade400,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _VoiceWaveform(
+      key: const ValueKey('waveform'),
+      accent: widget.accent,
+      amplitudeStream: widget.amplitudeStream!,
+    );
+  }
+
+  Widget _buildCaption() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.delete_outline_rounded, size: 11, color: widget.muted),
+        const SizedBox(width: 4),
+        Text(
+          'Recording — tap trash to cancel · max 5:00',
+          style: GoogleFonts.inter(
+            color: widget.muted,
+            fontSize: 11,
+            fontStyle: FontStyle.italic,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Voice Waveform ────────────────────────────────────────────────────────────────
+
+class _VoiceWaveform extends StatefulWidget {
+  const _VoiceWaveform({
+    super.key,
+    required this.accent,
+    required this.amplitudeStream,
+  });
+
+  final Color accent;
+  final Stream<Amplitude> amplitudeStream;
+
+  @override
+  State<_VoiceWaveform> createState() => _VoiceWaveformState();
+}
+
+class _VoiceWaveformState extends State<_VoiceWaveform> {
+  static const _barCount = 32;
+  final List<double> _bars = List.filled(_barCount, 0.0);
+  StreamSubscription<Amplitude>? _ampSub;
+  StreamSubscription<int>? _timerSub;
+  int _seconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ampSub = widget.amplitudeStream.listen(_onAmplitude);
+    _timerSub = Stream.periodic(const Duration(seconds: 1), (i) => i + 1)
+        .listen((s) {
+      if (mounted) setState(() => _seconds = s);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ampSub?.cancel();
+    _timerSub?.cancel();
+    super.dispose();
+  }
+
+  void _onAmplitude(Amplitude amp) {
+    if (!mounted) return;
+    final norm = ((amp.current + 60) / 60).clamp(0.0, 1.0);
+    setState(() {
+      _bars.removeAt(0);
+      _bars.add(norm);
+    });
+  }
+
+  String get _timeLabel {
+    final m = _seconds ~/ 60;
+    final s = _seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext ctx) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          const _PulsingDot(),
+          const SizedBox(width: 8),
+          Text(
+            _timeLabel,
+            style: GoogleFonts.jetBrainsMono(
+              color: widget.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: CustomPaint(
+              painter: _WaveformPainter(bars: List.of(_bars), color: widget.accent),
+              size: const Size(double.infinity, 28),
             ),
           ),
         ],
@@ -1222,6 +1836,135 @@ class _InputBarState extends State<_InputBar> {
     );
   }
 }
+
+// ── Pulsing Dot ───────────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, _) {
+        final t = Curves.easeOut.transform(_ctrl.value);
+        return Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFd44545),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFd44545).withValues(alpha: (1 - t) * 0.55),
+                blurRadius: 8 * t,
+                spreadRadius: 4 * t,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PressButton extends StatefulWidget {
+  const _PressButton({super.key, required this.onTap, required this.child});
+  final VoidCallback onTap;
+  final Widget child;
+  @override
+  State<_PressButton> createState() => _PressButtonState();
+}
+
+class _PressButtonState extends State<_PressButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 110));
+    _scale = Tween<double>(begin: 1.0, end: 0.86)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.bars, required this.color});
+  final List<double> bars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barW = 2.0;
+    const gap = 2.5;
+    const step = barW + gap;
+    final minH = size.height * 0.12;
+    final maxH = size.height;
+    final paint = Paint()..strokeCap = StrokeCap.round;
+
+    final totalW = bars.length * step - gap;
+    var x = (size.width - totalW) / 2;
+
+    for (final bar in bars) {
+      final h = minH + bar * (maxH - minH);
+      final top = (size.height - h) / 2;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, top, barW, h),
+        const Radius.circular(1),
+      );
+      paint.color = color.withValues(alpha: 0.25 + bar * 0.75);
+      canvas.drawRRect(rect, paint);
+      x += step;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) => true;
+}
+
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 
