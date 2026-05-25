@@ -30,7 +30,18 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
   final _repo = ReadingPlanRepository.instance;
 
   Future<void> _load() async {
-    final plans = await _repo.loadPlans();
+    // Remote is source of truth for authenticated users.
+    // Fall back to local cache (e.g. guest, offline first launch),
+    // then migrate any local-only plans up to Firestore.
+    var plans = await _repo.loadRemotePlans();
+    if (plans.isEmpty) {
+      plans = await _repo.loadPlans();
+      for (final p in plans) {
+        await _repo.upsertRemotePlan(p);
+      }
+    } else {
+      await _repo.savePlans(plans);
+    }
     if (mounted) {
       state = state.copyWith(plans: plans, isLoading: false);
       _rescheduleAll(plans);
@@ -58,9 +69,18 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
   Future<void> _save(List<ReadingPlan> plans) async {
     state = state.copyWith(plans: plans);
     await _repo.savePlans(plans);
+    for (final p in plans) {
+      await _repo.upsertRemotePlan(p);
+    }
   }
 
   Future<void> addPlan(ReadingPlan plan) async {
+    // If replacing an existing plan for the same text, remove the old one remotely.
+    final old =
+        state.plans.where((p) => p.textId == plan.textId).firstOrNull;
+    if (old != null) {
+      await _repo.deleteRemotePlan(old.id);
+    }
     final updated = [
       ...state.plans.where((p) => p.textId != plan.textId),
       plan,
@@ -118,6 +138,7 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
   }
 
   Future<void> deletePlan(String planId) async {
+    await _repo.deleteRemotePlan(planId);
     await _save(state.plans.where((p) => p.id != planId).toList());
   }
 }

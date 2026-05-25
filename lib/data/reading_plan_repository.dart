@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/reading_plan.dart';
 
@@ -9,6 +11,17 @@ class ReadingPlanRepository {
   static const _plansKey = 'reading_plans_v1';
   static const _maybeLaterKey = 'reading_popup_maybe_later_at';
   static const _shownDatesKey = 'reading_popup_shown_dates';
+
+  CollectionReference<Map<String, dynamic>>? _remoteCol() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('readingPlans');
+  }
+
+  // ── local cache ────────────────────────────────────────────────────────────
 
   Future<List<ReadingPlan>> loadPlans() async {
     final prefs = await SharedPreferences.getInstance();
@@ -28,6 +41,37 @@ class ReadingPlanRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _plansKey, jsonEncode(plans.map((p) => p.toJson()).toList()));
+  }
+
+  // ── remote (Firestore) ─────────────────────────────────────────────────────
+
+  Future<List<ReadingPlan>> loadRemotePlans() async {
+    final col = _remoteCol();
+    if (col == null) return [];
+    try {
+      final snap = await col.get();
+      return snap.docs
+          .map((d) => ReadingPlan.fromJson(d.data()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> upsertRemotePlan(ReadingPlan plan) async {
+    final col = _remoteCol();
+    if (col == null) return;
+    try {
+      await col.doc(plan.id).set(plan.toJson());
+    } catch (_) {}
+  }
+
+  Future<void> deleteRemotePlan(String planId) async {
+    final col = _remoteCol();
+    if (col == null) return;
+    try {
+      await col.doc(planId).delete();
+    } catch (_) {}
   }
 
   Future<bool> shouldShowPopup() async {
