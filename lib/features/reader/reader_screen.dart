@@ -11,6 +11,7 @@ import '../../providers/scripture_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/reading_plan_provider.dart';
 import '../../core/models/reading_plan.dart';
+import '../../providers/download_provider.dart';
 import '../../data/user_repository.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
@@ -40,6 +41,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _showTranslation = true;
   bool _showTranslit = true;
   bool _dismissedEndCard = false;
+  bool _waitingForDownload = false;
 
   @override
   void initState() {
@@ -49,7 +51,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       _error = 'Unsupported text: ${widget.textId}';
       _loading = false;
     } else {
-      _load();
+      final downloadStatus = ref.read(downloadProvider)[widget.textId]?.status;
+      if (downloadStatus == TextDownloadStatus.downloaded) {
+        _load();
+      } else {
+        setState(() {
+          _loading = false;
+          _waitingForDownload = true;
+        });
+      }
     }
   }
 
@@ -237,6 +247,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<Map<String, DownloadInfo>>(downloadProvider, (prev, next) {
+      final prevStatus = prev?[widget.textId]?.status;
+      final nextStatus = next[widget.textId]?.status;
+      if (_waitingForDownload &&
+          mounted &&
+          prevStatus != TextDownloadStatus.downloaded &&
+          nextStatus == TextDownloadStatus.downloaded) {
+        setState(() => _waitingForDownload = false);
+        _load();
+      }
+    });
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
     final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
@@ -255,6 +277,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         backgroundColor: bg,
         body: Center(child: Text(_error!, style: GoogleFonts.inter(color: muted))),
       );
+    }
+
+    if (_waitingForDownload) {
+      final info = ref.watch(downloadProvider)[widget.textId];
+      return _buildDownloadingScaffold(context, info);
     }
 
     return Scaffold(
@@ -375,6 +402,99 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadingScaffold(BuildContext context, DownloadInfo? info) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final accent = _meta != null
+        ? ReligionColors.accent(_meta!.religionId)
+        : (isDark ? AppColors.nightFg : AppColors.boneFg);
+
+    final progress = info?.progress ?? 0.0;
+    final isFailed = info?.status == TextDownloadStatus.failed;
+    final isDownloading = info?.status == TextDownloadStatus.downloading;
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: fg, size: 18),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 48, height: 48,
+                child: isFailed
+                    ? Icon(Icons.cloud_off_rounded, color: muted, size: 32)
+                    : CircularProgressIndicator(
+                        value: isDownloading && progress > 0 ? progress : null,
+                        color: accent,
+                        strokeWidth: 2,
+                      ),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                isFailed ? 'DOWNLOAD FAILED' : 'DOWNLOADING SCRIPTURE',
+                style: GoogleFonts.jetBrainsMono(
+                  color: muted,
+                  fontSize: 10,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isFailed
+                    ? 'Check your connection'
+                    : isDownloading && progress > 0
+                        ? '${(progress * 100).round()}%'
+                        : _meta?.title ?? '',
+                style: GoogleFonts.cormorantGaramond(
+                  color: fg,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w500,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              if (isFailed) ...[
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _waitingForDownload = true);
+                    ref.read(downloadProvider.notifier).retryText(widget.textId);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: accent.withValues(alpha: 0.4)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'RETRY',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: accent,
+                        fontSize: 10,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

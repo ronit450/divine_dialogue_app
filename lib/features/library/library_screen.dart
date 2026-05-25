@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/reading_plan_provider.dart';
+import '../../providers/download_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../core/models/reading_plan.dart';
@@ -17,6 +18,7 @@ class LibraryScreen extends ConsumerWidget {
     final religions = state.religions;
     final selectedReligion = state.selectedReligion;
     final planState = ref.watch(readingPlanProvider);
+    final downloadState = ref.watch(downloadProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -129,6 +131,7 @@ class LibraryScreen extends ConsumerWidget {
                     religion: activeReligion,
                     accent: accent,
                     isSelected: primaryText.id == state.selectedText?.id,
+                    downloadInfo: downloadState[primaryText.id],
                   );
                 }),
               ),
@@ -164,6 +167,7 @@ class LibraryScreen extends ConsumerWidget {
                         surface: surface,
                         onTap: () => context.push('/read/${text.id}'),
                         plan: planState.planForText(text.id),
+                        downloadInfo: downloadState[text.id],
                       ),
                     );
                   },
@@ -186,12 +190,51 @@ class _HeroTextCard extends StatelessWidget {
     required this.religion,
     required this.accent,
     required this.isSelected,
+    this.downloadInfo,
   });
 
   final SacredTextModel text;
   final ReligionModel religion;
   final Color accent;
   final bool isSelected;
+  final DownloadInfo? downloadInfo;
+
+  Widget _downloadTrailing() {
+    final info = downloadInfo;
+    if (info?.status == TextDownloadStatus.downloading) {
+      return SizedBox(
+        width: 32, height: 32,
+        child: Center(
+          child: SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(
+              value: info!.progress > 0 ? info.progress : null,
+              color: Colors.white,
+              strokeWidth: 1.5,
+            ),
+          ),
+        ),
+      );
+    }
+    if (info?.status == TextDownloadStatus.notDownloaded) {
+      return Container(
+        width: 32, height: 32,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.cloud_download_outlined, color: Colors.white, size: 16),
+      );
+    }
+    return Container(
+      width: 32, height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+    );
+  }
 
   String _watermarkGlyph(String religionId) => switch (religionId) {
     'sikhism'      => 'ਆਦਿ ਸਚੁ',
@@ -267,16 +310,30 @@ class _HeroTextCard extends StatelessWidget {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
-                    ),
+                    _downloadTrailing(),
                   ],
                 ),
+                if (downloadInfo case final di? when di.status == TextDownloadStatus.downloading) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: di.progress > 0 ? di.progress : null,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      minHeight: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'DOWNLOADING · ${(di.progress * 100).round()}%',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 8,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -434,6 +491,7 @@ class _TextListTile extends StatelessWidget {
     required this.surface,
     required this.onTap,
     this.plan,
+    this.downloadInfo,
   });
 
   final SacredTextModel text;
@@ -444,6 +502,28 @@ class _TextListTile extends StatelessWidget {
   final Color surface;
   final VoidCallback onTap;
   final ReadingPlan? plan;
+  final DownloadInfo? downloadInfo;
+
+  Widget _tileTrailing() {
+    final info = downloadInfo;
+    if (info?.status == TextDownloadStatus.downloading) {
+      return SizedBox(
+        width: 20, height: 20,
+        child: CircularProgressIndicator(
+          value: info!.progress > 0 ? info.progress : null,
+          color: accent,
+          strokeWidth: 1.5,
+        ),
+      );
+    }
+    if (info?.status == TextDownloadStatus.notDownloaded) {
+      return Icon(Icons.cloud_download_outlined, color: muted, size: 20);
+    }
+    if (info?.status == TextDownloadStatus.failed) {
+      return Icon(Icons.refresh_rounded, color: muted, size: 20);
+    }
+    return Icon(Icons.chevron_right_rounded, color: muted, size: 20);
+  }
 
   String _abbrev(String title) {
     final words = title.split(' ').where((w) => w.isNotEmpty).toList();
@@ -513,7 +593,7 @@ class _TextListTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: muted, size: 20),
+            _tileTrailing(),
           ],
         ),
       ),

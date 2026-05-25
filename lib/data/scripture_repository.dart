@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../core/models/scripture.dart';
 
 class ScriptureRepository {
@@ -69,12 +70,17 @@ class ScriptureRepository {
     return cache[page] ?? [];
   }
 
+  Future<String> _readFile(String relativePath) async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/scripture/$relativePath').readAsString();
+  }
+
   Future<void> _loadChunk(
     String dir, String prefix, int idx,
     Map<int, List<ScriptureVerse>> cache,
   ) async {
     final label = idx.toString().padLeft(3, '0');
-    final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
+    final raw = await _readFile('$dir/${prefix}_$label.json');
     final data = jsonDecode(raw) as Map<String, dynamic>;
     data.forEach((pageStr, lines) {
       final page = int.parse(pageStr);
@@ -104,7 +110,7 @@ class ScriptureRepository {
     Map<int, List<ScriptureVerse>> cache,
   ) async {
     final label = idx.toString().padLeft(3, '0');
-    final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
+    final raw = await _readFile('$dir/${prefix}_$label.json');
     final data = jsonDecode(raw) as Map<String, dynamic>;
     data.forEach((sargaStr, verses) {
       final sarga = int.parse(sargaStr);
@@ -132,7 +138,7 @@ class ScriptureRepository {
     Map<int, List<ScriptureVerse>> cache,
   ) async {
     final label = idx.toString().padLeft(3, '0');
-    final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
+    final raw = await _readFile('$dir/${prefix}_$label.json');
     final data = jsonDecode(raw) as Map<String, dynamic>;
     data.forEach((chStr, hadiths) {
       final ch = int.parse(chStr);
@@ -154,7 +160,7 @@ class ScriptureRepository {
   }
 
   Future<List<ScriptureChapter>> _loadQuran() async {
-    final raw = await rootBundle.loadString('assets/data/scripture/quran.json');
+    final raw = await _readFile('quran.json');
     final surahs = jsonDecode(raw) as List<dynamic>;
     return surahs.map((s) {
       final sm = s as Map<String, dynamic>;
@@ -180,7 +186,7 @@ class ScriptureRepository {
   }
 
   Future<List<ScriptureChapter>> _loadGita() async {
-    final raw = await rootBundle.loadString('assets/data/scripture/gita.json');
+    final raw = await _readFile('gita.json');
     final chapters = jsonDecode(raw) as List<dynamic>;
     return chapters.map((c) {
       final cm = c as Map<String, dynamic>;
@@ -204,7 +210,7 @@ class ScriptureRepository {
   }
 
   Future<List<ScriptureChapter>> _loadBible() async {
-    final raw = await rootBundle.loadString('assets/data/scripture/bible.json');
+    final raw = await _readFile('bible.json');
     final books = jsonDecode(raw) as List<dynamic>;
     final chapters = <ScriptureChapter>[];
     int chapterIndex = 1;
