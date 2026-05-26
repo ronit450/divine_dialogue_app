@@ -95,7 +95,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
     if (mounted) {
       setState(() => _loading = false);
-      if (isFirstOpen && !_isSikhType) {
+      if (isFirstOpen && !_isSikhType && widget.initialChapter == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _openToc();
         });

@@ -297,6 +297,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           fg: fg,
                           muted: muted,
                           line: line,
+                          textId: chatState.session?.textId,
                         );
                       }
                       final m = messages[i];
@@ -315,6 +316,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         fg: fg,
                         muted: muted,
                         line: line,
+                        textId: chatState.session?.textId,
                       );
                     },
                   ),
@@ -556,6 +558,7 @@ class _AgentBubble extends StatelessWidget {
     required this.fg,
     required this.muted,
     required this.line,
+    this.textId,
   });
 
   final ChatMessage message;
@@ -566,6 +569,7 @@ class _AgentBubble extends StatelessWidget {
   final Color fg;
   final Color muted;
   final Color line;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
@@ -700,6 +704,7 @@ class _AgentBubble extends StatelessWidget {
                         fg: fg,
                         muted: muted,
                         line: line,
+                        textId: textId,
                       ),
                     ),
                   ),
@@ -839,6 +844,11 @@ class _ToolCallBlock extends StatelessWidget {
 
 // ─── Passage card (rendered below the bubble) ────────────────────────────────
 
+int? _parseChapterFromReference(String reference) {
+  final match = RegExp(r'(\d+)').firstMatch(reference);
+  return match != null ? int.tryParse(match.group(1)!) : null;
+}
+
 class _PassageCard extends StatelessWidget {
   const _PassageCard({
     required this.citation,
@@ -847,6 +857,7 @@ class _PassageCard extends StatelessWidget {
     required this.fg,
     required this.muted,
     required this.line,
+    this.textId,
   });
 
   final Citation citation;
@@ -855,47 +866,64 @@ class _PassageCard extends StatelessWidget {
   final Color fg;
   final Color muted;
   final Color line;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
     final cardBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
     final hasOriginal = citation.originalText.isNotEmpty;
+    final canNavigate = textId != null;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 3,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  citation.reference,
-                  style: GoogleFonts.jetBrainsMono(
+    return GestureDetector(
+      onTap: canNavigate
+          ? () {
+              final chapter = _parseChapterFromReference(citation.reference);
+              context.push(
+                '/read/$textId',
+                extra: chapter != null ? {'chapter': chapter} : null,
+              );
+            }
+          : null,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        decoration: BoxDecoration(
+          color: cardBg,
+          border: Border.all(
+              color: canNavigate ? accent.withValues(alpha: 0.35) : line),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 12,
+                  decoration: BoxDecoration(
                     color: accent,
-                    fontSize: 11,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w600,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    citation.reference,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: accent,
+                      fontSize: 11,
+                      letterSpacing: 0.8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (canNavigate) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 14, color: accent),
+                ],
+              ],
+            ),
           if (hasOriginal) ...[
             const SizedBox(height: 8),
             Directionality(
@@ -927,6 +955,7 @@ class _PassageCard extends StatelessWidget {
           ],
         ],
       ),
+    ),
     );
   }
 }

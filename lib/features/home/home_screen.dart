@@ -87,8 +87,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void _onRouteChanged() {
     if (!mounted) return;
     final path = _router?.routerDelegate.currentConfiguration.uri.path ?? '';
-    if (path == '/home' && _lastRoute != '/home') _checkAutoReset();
+    if (path == '/home' && _lastRoute != '/home') {
+      _checkAutoReset();
+      _checkReligionChanged();
+    }
     if (path.isNotEmpty) _lastRoute = path;
+  }
+
+  void _checkReligionChanged() {
+    final session = ref.read(chatProvider).session;
+    if (session == null) return;
+    final currentReligion = ref.read(religionProvider).selectedReligion;
+    if (currentReligion != null && session.religionId != currentReligion.id) {
+      _startNewChat();
+    }
   }
 
   void _checkAutoReset() {
@@ -257,13 +269,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void _startNewChat() {
     final rState = ref.read(religionProvider);
     final religion = rState.selectedReligion;
-    final text = rState.selectedText;
+    final text = rState.selectedText ?? religion?.texts.firstOrNull;
     if (religion != null && text != null) {
       ref.read(chatProvider.notifier).startNewSession(
         religionId: religion.id,
         textId: text.id,
         textTitle: text.title,
       );
+    } else {
+      ref.read(chatProvider.notifier).clearSession();
     }
     setState(() => _chatStarted = false);
   }
@@ -376,6 +390,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         fg: fg,
                         muted: muted,
                         line: line,
+                        textId: chatState.session?.textId,
                       )
                     : _IdleContent(
                         key: const ValueKey('idle'),
@@ -757,6 +772,7 @@ class _MessagesList extends StatelessWidget {
     required this.fg,
     required this.muted,
     required this.line,
+    this.textId,
   });
 
   final List<ChatMessage> messages;
@@ -767,6 +783,7 @@ class _MessagesList extends StatelessWidget {
   final Color fg;
   final Color muted;
   final Color line;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
@@ -830,6 +847,7 @@ class _MessagesList extends StatelessWidget {
           isDark: isDark,
           fg: fg,
           line: line,
+          textId: textId,
         );
       },
     );
@@ -1975,6 +1993,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isDark,
     required this.fg,
     required this.line,
+    this.textId,
   });
 
   final ChatMessage message;
@@ -1982,6 +2001,7 @@ class _MessageBubble extends StatelessWidget {
   final bool isDark;
   final Color fg;
   final Color line;
+  final String? textId;
 
   void _showCitationsSheet(BuildContext context) {
     final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -1999,6 +2019,7 @@ class _MessageBubble extends StatelessWidget {
         muted: muted,
         line: line,
         sheetBg: sheetBg,
+        textId: textId,
       ),
     );
   }
@@ -2109,6 +2130,7 @@ class _CitationsSheet extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.sheetBg,
+    this.textId,
   });
 
   final List<Citation> citations;
@@ -2118,6 +2140,7 @@ class _CitationsSheet extends StatelessWidget {
   final Color muted;
   final Color line;
   final Color sheetBg;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
@@ -2190,6 +2213,7 @@ class _CitationsSheet extends StatelessWidget {
                   isDark: isDark,
                   fg: fg,
                   line: line,
+                  textId: textId,
                 ),
               ),
             ),
@@ -2200,6 +2224,11 @@ class _CitationsSheet extends StatelessWidget {
   }
 }
 
+int? _parseCitationChapter(String reference) {
+  final match = RegExp(r'(\d+)').firstMatch(reference);
+  return match != null ? int.tryParse(match.group(1)!) : null;
+}
+
 class _CitationCard extends StatelessWidget {
   const _CitationCard({
     required this.citation,
@@ -2207,6 +2236,7 @@ class _CitationCard extends StatelessWidget {
     required this.isDark,
     required this.fg,
     required this.line,
+    this.textId,
   });
 
   final Citation citation;
@@ -2214,14 +2244,26 @@ class _CitationCard extends StatelessWidget {
   final bool isDark;
   final Color fg;
   final Color line;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
     final cardBg =
         isDark ? AppColors.nightSurface : AppColors.boneSurface;
     final hasOriginal = citation.originalText.isNotEmpty;
+    final canNavigate = textId != null;
 
-    return Container(
+    return GestureDetector(
+      onTap: canNavigate
+          ? () {
+              final chapter = _parseCitationChapter(citation.reference);
+              context.push(
+                '/read/$textId',
+                extra: chapter != null ? {'chapter': chapter} : null,
+              );
+            }
+          : null,
+      child: Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -2245,7 +2287,8 @@ class _CitationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
+              Flexible(
+                child: Text(
                 citation.reference.toUpperCase(),
                 style: GoogleFonts.jetBrainsMono(
                   color: accent,
@@ -2254,6 +2297,11 @@ class _CitationCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              ),
+              if (canNavigate) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 14, color: accent),
+              ],
             ],
           ),
           if (hasOriginal) ...[
@@ -2291,6 +2339,7 @@ class _CitationCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

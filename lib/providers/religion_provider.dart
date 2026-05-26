@@ -115,7 +115,18 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
   }
 
   Future<void> changeReligion(ReligionModel religion) async {
-    state = state.copyWith(selectedReligion: religion, selectedTexts: []);
+    // Use constructor directly — copyWith cannot null out selectedText,
+    // and leaving the old religion's text causes "no books selected" errors
+    // when the old textId is not in the backend's book mapping.
+    state = ReligionState(
+      religions: state.religions,
+      selectedReligion: religion,
+      selectedText: null,
+      selectedTexts: const [],
+      isLoaded: state.isLoaded,
+      signInDone: state.signInDone,
+      onboardingDone: state.onboardingDone,
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_religion', religion.id);
     await prefs.remove('selected_texts');

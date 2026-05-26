@@ -81,6 +81,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   static const _uuid = Uuid();
 
+  void clearSession() {
+    state = const ChatState();
+  }
+
   void loadSession(ChatSession session) {
     state = state.copyWith(
       session: session,
