@@ -14,6 +14,7 @@ import '../../features/library/library_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/developers/developers_screen.dart';
+import '../../features/report_issue/report_issue_screen.dart';
 import '../../features/reader/reader_screen.dart';
 import '../../features/reading_plans/reading_plans_screen.dart';
 import '../../features/reading_plans/plan_detail_screen.dart';
@@ -92,6 +93,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/developers',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const DevelopersScreen(),
+      ),
+      GoRoute(
+        path: '/report-issue',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const ReportIssueScreen(),
       ),
       GoRoute(
         path: '/reading-plans',
