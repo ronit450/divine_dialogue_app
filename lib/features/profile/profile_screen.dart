@@ -228,13 +228,26 @@ class ProfileScreen extends ConsumerWidget {
                       surface: surface,
                       line: line,
                       isDark: isDark,
-                      child: _ActionRow(
-                        icon: Icons.people_outline_rounded,
-                        label: 'Meet the team',
-                        fg: fg,
-                        muted: muted,
-                        line: line,
-                        onTap: () => context.push('/developers'),
+                      child: Column(
+                        children: [
+                          _ActionRow(
+                            icon: Icons.people_outline_rounded,
+                            label: 'Meet the team',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.push('/developers'),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.flag_outlined,
+                            label: 'Report an issue',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.push('/report-issue'),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
