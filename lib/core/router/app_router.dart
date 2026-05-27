@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/religion_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_intro_screen.dart';
+import '../../features/onboarding/onboarding_language_screen.dart';
 import '../../features/onboarding/onboarding_religion_screen.dart';
 import '../../features/onboarding/onboarding_text_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
@@ -29,12 +31,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       (s) => (isLoaded: s.isLoaded, signInDone: s.signInDone, onboardingDone: s.onboardingDone),
     ),
   );
+  final localeState = ref.watch(localeProvider);
 
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/splash',
     redirect: (context, state) {
-      if (!isLoaded) return null;
+      if (!isLoaded || !localeState.isLoaded) return null;
       final loc = state.matchedLocation;
       if (loc == '/splash') return null;
 
@@ -46,9 +49,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (!onboardingDone) {
-        const onboardingPaths = ['/onboarding/religion', '/onboarding/text', '/profile-setup', '/sign-in'];
+        const onboardingPaths = [
+          '/onboarding/language',
+          '/onboarding/religion',
+          '/onboarding/text',
+          '/profile-setup',
+          '/sign-in',
+        ];
         final allowed = onboardingPaths.any((p) => loc.startsWith(p));
-        if (!allowed) return '/onboarding/religion';
+        if (!allowed) {
+          return localeState.languagePicked
+              ? '/onboarding/religion'
+              : '/onboarding/language';
+        }
         return null;
       }
 
@@ -67,6 +80,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingIntroScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/language',
+        builder: (context, state) => const OnboardingLanguageScreen(),
       ),
       GoRoute(
         path: '/onboarding/religion',

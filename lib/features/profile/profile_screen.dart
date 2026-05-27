@@ -6,8 +6,10 @@ import '../../providers/religion_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
+import '../../core/l10n/app_strings.dart';
 import '../../shared/widgets/religion_glyph.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -31,6 +33,7 @@ class ProfileScreen extends ConsumerWidget {
     final displayName = userState.user != null
         ? '${userState.user!.firstName} ${userState.user!.lastName}'.trim()
         : 'Guest';
+    final s = AppStrings.of(context);
 
     return Scaffold(
       backgroundColor: bg,
@@ -59,11 +62,16 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'Settings',
-                          style: GoogleFonts.cormorantGaramond(
-                            color: fg, fontSize: 28, fontWeight: FontWeight.w500,
-                            fontStyle: FontStyle.italic,
-                          ),
+                          s.settings,
+                          style: s.isUrdu
+                              ? GoogleFonts.notoNastaliqUrdu(
+                                  color: fg, fontSize: 28, fontWeight: FontWeight.w500,
+                                  height: 1.5,
+                                )
+                              : GoogleFonts.cormorantGaramond(
+                                  color: fg, fontSize: 28, fontWeight: FontWeight.w500,
+                                  fontStyle: FontStyle.italic,
+                                ),
                         ),
                       ],
                     ),
@@ -90,21 +98,21 @@ class ProfileScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            displayName,
+                            displayName.isEmpty ? s.guest : displayName,
                             style: GoogleFonts.cormorantGaramond(
                               color: fg, fontSize: 22, fontWeight: FontWeight.w500,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            religion?.name ?? 'No tradition selected',
+                            religion?.name ?? s.noTraditionSelected,
                             style: GoogleFonts.inter(color: muted, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _SectionLabel(label: 'ACCOUNT', muted: muted),
+                    _SectionLabel(label: s.sectionAccount, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
@@ -114,19 +122,21 @@ class ProfileScreen extends ConsumerWidget {
                         children: [
                           _ActionRow(
                             icon: Icons.person_outline_rounded,
-                            label: 'Edit profile',
+                            label: s.editProfile,
                             fg: fg,
                             muted: muted,
                             line: line,
+                            isUrdu: s.isUrdu,
                             onTap: () => context.go('/profile-setup'),
                           ),
                           Divider(height: 1, color: line),
                           _ActionRow(
                             icon: Icons.logout_rounded,
-                            label: 'Sign out',
+                            label: s.signOut,
                             fg: Colors.red.shade400,
                             muted: muted,
                             line: line,
+                            isUrdu: s.isUrdu,
                             onTap: () async {
                               await ref.read(authProvider.notifier).signOut();
                               await ref.read(religionProvider.notifier).resetSignIn();
@@ -137,7 +147,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _SectionLabel(label: 'PRACTICE', muted: muted),
+                    _SectionLabel(label: s.sectionPractice, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
@@ -145,15 +155,16 @@ class ProfileScreen extends ConsumerWidget {
                       isDark: isDark,
                       child: _ActionRow(
                         icon: Icons.menu_book_rounded,
-                        label: 'Reading plan',
+                        label: s.readingPlan,
                         fg: fg,
                         muted: muted,
                         line: line,
+                        isUrdu: s.isUrdu,
                         onTap: () => context.push('/reading-plans'),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _SectionLabel(label: 'TRADITION', muted: muted),
+                    _SectionLabel(label: s.sectionTradition, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
@@ -172,6 +183,8 @@ class ProfileScreen extends ConsumerWidget {
                             showDivider: !isLast,
                             line: line,
                             fg: fg,
+                            isUrdu: s.isUrdu,
+                            urduName: s.religionName(r.id, r.name),
                             onTap: () => ref.read(religionProvider.notifier).changeReligion(r),
                           );
                         }).toList(),
@@ -179,7 +192,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 24),
                     if (religion != null && religion.texts.isNotEmpty) ...[
-                      _SectionLabel(label: 'TEXTS', muted: muted),
+                      _SectionLabel(label: s.sectionTexts, muted: muted, isUrdu: s.isUrdu),
                       const SizedBox(height: 10),
                       _SurfaceCard(
                         surface: surface,
@@ -187,10 +200,11 @@ class ProfileScreen extends ConsumerWidget {
                         isDark: isDark,
                         child: _ActionRow(
                           icon: Icons.menu_book_rounded,
-                          label: 'Choose texts',
+                          label: s.chooseTexts,
                           fg: fg,
                           muted: muted,
                           line: line,
+                          isUrdu: s.isUrdu,
                           onTap: () => _showTextPicker(
                             context: context,
                             religion: religion,
@@ -205,24 +219,48 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 24),
                     ],
-                    _SectionLabel(label: 'APPEARANCE', muted: muted),
+                    _SectionLabel(label: s.sectionGeneral, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
                       line: line,
                       isDark: isDark,
-                      child: _ToggleRow(
-                        icon: Icons.dark_mode_rounded,
-                        label: 'Dark mode',
-                        value: themeMode == ThemeMode.dark,
-                        accent: accent,
-                        fg: fg,
-                        muted: muted,
-                        onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+                      child: Column(
+                        children: [
+                          _ToggleRow(
+                            icon: Icons.dark_mode_rounded,
+                            label: s.darkMode,
+                            value: themeMode == ThemeMode.dark,
+                            accent: accent,
+                            fg: fg,
+                            muted: muted,
+                            isUrdu: s.isUrdu,
+                            onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.language_rounded,
+                            label: s.language,
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            isUrdu: s.isUrdu,
+                            trailing: s.languageCurrentValue,
+                            onTap: () => _showLanguageSheet(
+                              context: context,
+                              accent: accent,
+                              fg: fg,
+                              muted: muted,
+                              line: line,
+                              surface: surface,
+                              bg: bg,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _SectionLabel(label: 'DEVELOPER', muted: muted),
+                    _SectionLabel(label: s.sectionDeveloper, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
@@ -232,26 +270,28 @@ class ProfileScreen extends ConsumerWidget {
                         children: [
                           _ActionRow(
                             icon: Icons.people_outline_rounded,
-                            label: 'Meet the team',
+                            label: s.meetTheTeam,
                             fg: fg,
                             muted: muted,
                             line: line,
+                            isUrdu: s.isUrdu,
                             onTap: () => context.push('/developers'),
                           ),
                           Divider(height: 1, color: line),
                           _ActionRow(
                             icon: Icons.flag_outlined,
-                            label: 'Report an issue',
+                            label: s.reportAnIssue,
                             fg: fg,
                             muted: muted,
                             line: line,
+                            isUrdu: s.isUrdu,
                             onTap: () => context.push('/report-issue'),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _SectionLabel(label: 'ABOUT', muted: muted),
+                    _SectionLabel(label: s.sectionAbout, muted: muted, isUrdu: s.isUrdu),
                     const SizedBox(height: 10),
                     _SurfaceCard(
                       surface: surface,
@@ -259,13 +299,14 @@ class ProfileScreen extends ConsumerWidget {
                       isDark: isDark,
                       child: Column(
                         children: [
-                          _InfoRow(label: 'Version', value: '1.0.0', fg: fg, muted: muted),
+                          _InfoRow(label: s.version, value: '1.0.0', fg: fg, muted: muted, isUrdu: s.isUrdu),
                           Divider(height: 1, color: line),
                           _InfoRow(
-                            label: 'Traditions',
-                            value: '${religionState.religions.length} religions',
+                            label: s.sectionTradition,
+                            value: s.religions(religionState.religions.length),
                             fg: fg,
                             muted: muted,
+                            isUrdu: s.isUrdu,
                           ),
                         ],
                       ),
@@ -313,17 +354,22 @@ class _SurfaceCard extends StatelessWidget {
 }
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label, required this.muted});
+  const _SectionLabel({required this.label, required this.muted, this.isUrdu = false});
   final String label;
   final Color muted;
+  final bool isUrdu;
 
   @override
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: GoogleFonts.jetBrainsMono(
-        color: muted, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 1.5,
-      ),
+      style: isUrdu
+          ? GoogleFonts.notoNastaliqUrdu(
+              color: muted, fontSize: 13, fontWeight: FontWeight.w600,
+            )
+          : GoogleFonts.jetBrainsMono(
+              color: muted, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 1.5,
+            ),
     );
   }
 }
@@ -336,6 +382,8 @@ class _ActionRow extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.onTap,
+    this.isUrdu = false,
+    this.trailing,
   });
 
   final IconData icon;
@@ -344,9 +392,18 @@ class _ActionRow extends StatelessWidget {
   final Color muted;
   final Color line;
   final VoidCallback onTap;
+  final bool isUrdu;
+  final String? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = isUrdu
+        ? GoogleFonts.notoNastaliqUrdu(color: fg, fontSize: 16, fontWeight: FontWeight.w500, height: 1.5)
+        : GoogleFonts.inter(color: fg, fontSize: 14);
+    final trailingStyle = isUrdu
+        ? GoogleFonts.notoNastaliqUrdu(color: muted, fontSize: 14, height: 1.5)
+        : GoogleFonts.inter(color: muted, fontSize: 13);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -357,8 +414,12 @@ class _ActionRow extends StatelessWidget {
             Icon(icon, color: fg, size: 18),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
+              child: Text(label, style: labelStyle),
             ),
+            if (trailing != null) ...[
+              Text(trailing!, style: trailingStyle),
+              const SizedBox(width: 4),
+            ],
             Icon(Icons.chevron_right_rounded, color: muted, size: 18),
           ],
         ),
@@ -376,6 +437,8 @@ class _ReligionRow extends StatelessWidget {
     required this.line,
     required this.fg,
     required this.onTap,
+    this.isUrdu = false,
+    this.urduName,
   });
 
   final ReligionModel religion;
@@ -385,9 +448,27 @@ class _ReligionRow extends StatelessWidget {
   final Color line;
   final Color fg;
   final VoidCallback onTap;
+  final bool isUrdu;
+  final String? urduName;
 
   @override
   Widget build(BuildContext context) {
+    final displayName = (isUrdu && urduName != null && urduName!.isNotEmpty)
+        ? urduName!
+        : religion.name;
+    final nameStyle = isUrdu
+        ? GoogleFonts.notoNastaliqUrdu(
+            color: isSelected ? accent : fg,
+            fontSize: 17,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            height: 1.5,
+          )
+        : GoogleFonts.inter(
+            color: isSelected ? accent : fg,
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          );
+
     return Column(
       children: [
         GestureDetector(
@@ -399,16 +480,7 @@ class _ReligionRow extends StatelessWidget {
               children: [
                 ReligionGlyph(religionId: religion.id, size: 18, color: accent),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    religion.name,
-                    style: GoogleFonts.inter(
-                      color: isSelected ? accent : fg,
-                      fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                  ),
-                ),
+                Expanded(child: Text(displayName, style: nameStyle)),
                 if (isSelected)
                   Icon(Icons.check_circle_rounded, color: accent, size: 18),
               ],
@@ -430,6 +502,7 @@ class _ToggleRow extends StatelessWidget {
     required this.fg,
     required this.muted,
     required this.onChanged,
+    this.isUrdu = false,
   });
 
   final IconData icon;
@@ -439,6 +512,7 @@ class _ToggleRow extends StatelessWidget {
   final Color fg;
   final Color muted;
   final ValueChanged<bool> onChanged;
+  final bool isUrdu;
 
   @override
   Widget build(BuildContext context) {
@@ -449,7 +523,12 @@ class _ToggleRow extends StatelessWidget {
           Icon(icon, color: muted, size: 18),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
+            child: Text(
+              label,
+              style: isUrdu
+                  ? GoogleFonts.notoNastaliqUrdu(color: fg, fontSize: 16, height: 1.5)
+                  : GoogleFonts.inter(color: fg, fontSize: 14),
+            ),
           ),
           Switch(
             value: value,
@@ -469,24 +548,292 @@ class _InfoRow extends StatelessWidget {
     required this.value,
     required this.fg,
     required this.muted,
+    this.isUrdu = false,
   });
 
   final String label;
   final String value;
   final Color fg;
   final Color muted;
+  final bool isUrdu;
 
   @override
   Widget build(BuildContext context) {
+    final style = isUrdu
+        ? GoogleFonts.notoNastaliqUrdu(fontSize: 15, height: 1.5)
+        : GoogleFonts.inter(fontSize: 14);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
-          Text(value, style: GoogleFonts.inter(color: muted, fontSize: 14)),
+          Text(label, style: style.copyWith(color: fg)),
+          Text(value, style: style.copyWith(color: muted)),
         ],
       ),
+    );
+  }
+}
+
+void _showLanguageSheet({
+  required BuildContext context,
+  required Color accent,
+  required Color fg,
+  required Color muted,
+  required Color line,
+  required Color surface,
+  required Color bg,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: bg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => _LanguageSheet(
+      accent: accent, fg: fg, muted: muted, line: line, surface: surface, bg: bg,
+    ),
+  );
+}
+
+class _LanguageSheet extends ConsumerStatefulWidget {
+  const _LanguageSheet({
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.surface,
+    required this.bg,
+  });
+
+  final Color accent, fg, muted, line, surface, bg;
+
+  @override
+  ConsumerState<_LanguageSheet> createState() => _LanguageSheetState();
+}
+
+class _LanguageSheetState extends ConsumerState<_LanguageSheet> {
+  late String _selectedCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCode = ref.read(localeProvider).locale.languageCode;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
+
+    final langs = [
+      (
+        code: 'en',
+        name: 'English',
+        native: 'English',
+        sample: 'Indeed, with hardship comes ease.',
+      ),
+      (
+        code: 'ur',
+        name: 'Urdu',
+        native: 'اردو',
+        sample: 'بے شک ہر مشکل کے ساتھ آسانی ہے۔',
+      ),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+            color: widget.muted.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  s.chooseLanguage,
+                  style: s.isUrdu
+                      ? GoogleFonts.notoNastaliqUrdu(
+                          color: widget.fg, fontSize: 26, fontWeight: FontWeight.w500, height: 1.5,
+                        )
+                      : GoogleFonts.cormorantGaramond(
+                          color: widget.fg, fontSize: 24,
+                          fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+                        ),
+                ),
+              ),
+              Text(
+                '2 · AVAILABLE',
+                style: GoogleFonts.jetBrainsMono(
+                  color: widget.muted, fontSize: 9.5, letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          child: Text(
+            s.languageSheetNote,
+            style: s.isUrdu
+                ? GoogleFonts.notoNastaliqUrdu(
+                    color: widget.muted, fontSize: 14, height: 1.7,
+                  )
+                : GoogleFonts.inter(color: widget.muted, fontSize: 13, height: 1.55),
+            textAlign: s.isUrdu ? TextAlign.right : TextAlign.left,
+          ),
+        ),
+        for (final lang in langs) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedCode = lang.code),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _selectedCode == lang.code
+                      ? widget.accent.withValues(alpha: 0.08)
+                      : widget.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _selectedCode == lang.code ? widget.accent : widget.line,
+                    width: _selectedCode == lang.code ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedCode == lang.code ? widget.accent : widget.line,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: _selectedCode == lang.code
+                          ? Center(
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: widget.accent,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                lang.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 15, fontWeight: FontWeight.w600,
+                                  color: widget.fg,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                lang.native,
+                                style: lang.code == 'ur'
+                                    ? GoogleFonts.notoNastaliqUrdu(
+                                        fontSize: 18, color: widget.fg, height: 1.5,
+                                      )
+                                    : GoogleFonts.cormorantGaramond(
+                                        fontSize: 15, color: widget.fg, fontStyle: FontStyle.italic,
+                                      ),
+                                textDirection: lang.code == 'ur'
+                                    ? TextDirection.rtl
+                                    : TextDirection.ltr,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            lang.sample,
+                            style: lang.code == 'ur'
+                                ? GoogleFonts.notoNastaliqUrdu(
+                                    fontSize: 15, color: widget.muted, height: 1.7,
+                                  )
+                                : GoogleFonts.cormorantGaramond(
+                                    fontSize: 13.5, color: widget.muted,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                            textDirection: lang.code == 'ur'
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 6, 20, MediaQuery.of(context).viewInsets.bottom + 28,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(color: widget.line),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    s.cancel,
+                    style: s.isUrdu
+                        ? GoogleFonts.notoNastaliqUrdu(color: widget.fg, fontSize: 16, height: 1.5)
+                        : GoogleFonts.inter(color: widget.fg, fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: () async {
+                    await ref.read(localeProvider.notifier).setLocale(Locale(_selectedCode));
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: widget.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    s.done,
+                    style: s.isUrdu
+                        ? GoogleFonts.notoNastaliqUrdu(color: Colors.white, fontSize: 16, height: 1.5)
+                        : GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

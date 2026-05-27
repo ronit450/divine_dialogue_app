@@ -5,17 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/l10n/app_strings.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
-
-  static const _tabs = [
-    _Tab(label: 'Home'),
-    _Tab(label: 'Read'),
-    _Tab(label: 'Self'),
-  ];
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
@@ -78,11 +73,6 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 }
 
-class _Tab {
-  const _Tab({required this.label});
-  final String label;
-}
-
 class _NavBar extends StatelessWidget {
   const _NavBar({
     required this.currentIndex,
@@ -104,6 +94,8 @@ class _NavBar extends StatelessWidget {
     final bgColor = isDark
         ? AppColors.nightBg.withValues(alpha: 0.88)
         : AppColors.boneBg.withValues(alpha: 0.88);
+    final s = AppStrings.of(context);
+    final labels = [s.tabHome, s.tabRead, s.tabSelf];
 
     return ClipRect(
       child: BackdropFilter(
@@ -115,8 +107,7 @@ class _NavBar extends StatelessWidget {
             border: Border(top: BorderSide(color: borderColor, width: 0.5)),
           ),
           child: Row(
-            children: List.generate(AppShell._tabs.length, (i) {
-              final tab = AppShell._tabs[i];
+            children: List.generate(3, (i) {
               final active = i == currentIndex;
               return Expanded(
                 child: GestureDetector(
@@ -139,13 +130,20 @@ class _NavBar extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          tab.label,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                            color: active ? accent : muted,
-                            letterSpacing: 0.5,
-                          ),
+                          labels[i],
+                          style: s.isUrdu
+                              ? GoogleFonts.notoNastaliqUrdu(
+                                  fontSize: 11,
+                                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                                  color: active ? accent : muted,
+                                  height: 1.0,
+                                )
+                              : GoogleFonts.jetBrainsMono(
+                                  fontSize: 9,
+                                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                                  color: active ? accent : muted,
+                                  letterSpacing: 0.5,
+                                ),
                         ),
                       ],
                     ),

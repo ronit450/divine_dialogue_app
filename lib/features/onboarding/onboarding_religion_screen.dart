@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
+import '../../core/l10n/app_strings.dart';
 import '../../shared/widgets/religion_glyph.dart';
 
 class OnboardingReligionScreen extends ConsumerWidget {
@@ -21,6 +22,7 @@ class OnboardingReligionScreen extends ConsumerWidget {
     final line = isDark ? AppColors.nightLine : AppColors.boneLine;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
     final accent = selected?.accentColor ?? AppColors.islamGreen;
+    final s = AppStrings.of(context);
 
     return Scaffold(
       backgroundColor: bg,
@@ -33,9 +35,9 @@ class OnboardingReligionScreen extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _CircleBackButton(fg: fg, line: line, onTap: () => context.go('/onboarding')),
+                  _CircleBackButton(fg: fg, line: line, onTap: () => context.go('/onboarding/language')),
                   Text(
-                    'STEP · 01 OF 02',
+                    s.onboardStep2,
                     style: GoogleFonts.jetBrainsMono(
                       color: muted, fontSize: 10, letterSpacing: 1.5, fontWeight: FontWeight.w500,
                     ),
@@ -49,16 +51,24 @@ class OnboardingReligionScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Which path\nguides you?',
-                    style: GoogleFonts.cormorantGaramond(
-                      color: fg, fontSize: 38, fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w500, height: 1.05, letterSpacing: -0.4,
-                    ),
+                    s.onboardTradTitle,
+                    style: s.isUrdu
+                        ? GoogleFonts.notoNastaliqUrdu(
+                            color: fg, fontSize: 30, fontWeight: FontWeight.w500, height: 1.4,
+                          )
+                        : GoogleFonts.cormorantGaramond(
+                            color: fg, fontSize: 38, fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w500, height: 1.05, letterSpacing: -0.4,
+                          ),
+                    textDirection: s.isUrdu ? TextDirection.rtl : TextDirection.ltr,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Pick a tradition — or open the dialogue across all of them.',
-                    style: GoogleFonts.inter(color: muted, fontSize: 14, height: 1.5),
+                    s.onboardTradSub,
+                    style: s.isUrdu
+                        ? GoogleFonts.notoNastaliqUrdu(color: muted, fontSize: 14, height: 1.7)
+                        : GoogleFonts.inter(color: muted, fontSize: 14, height: 1.5),
+                    textDirection: s.isUrdu ? TextDirection.rtl : TextDirection.ltr,
                   ),
                 ],
               ),
@@ -81,8 +91,10 @@ class OnboardingReligionScreen extends ConsumerWidget {
                             itemCount: religions.length,
                             itemBuilder: (context, i) => _ReligionCard(
                               religion: religions[i],
+                              displayName: s.religionName(religions[i].id, religions[i].name),
                               isSelected: selected?.id == religions[i].id,
                               isDark: isDark,
+                              isUrdu: s.isUrdu,
                               fg: fg,
                               muted: muted,
                               line: line,
@@ -109,11 +121,17 @@ class OnboardingReligionScreen extends ConsumerWidget {
                     shape: const StadiumBorder(),
                   ),
                   child: Text(
-                    'Continue',
-                    style: GoogleFonts.inter(
-                      fontSize: 16, fontWeight: FontWeight.w600,
-                      color: selected == null ? muted : Colors.white,
-                    ),
+                    s.continueBtn,
+                    style: s.isUrdu
+                        ? GoogleFonts.notoNastaliqUrdu(
+                            fontSize: 18, fontWeight: FontWeight.w600,
+                            color: selected == null ? muted : Colors.white,
+                            height: 1.0,
+                          )
+                        : GoogleFonts.inter(
+                            fontSize: 16, fontWeight: FontWeight.w600,
+                            color: selected == null ? muted : Colors.white,
+                          ),
                   ),
                 ),
               ),
@@ -128,8 +146,10 @@ class OnboardingReligionScreen extends ConsumerWidget {
 class _ReligionCard extends StatelessWidget {
   const _ReligionCard({
     required this.religion,
+    required this.displayName,
     required this.isSelected,
     required this.isDark,
+    required this.isUrdu,
     required this.fg,
     required this.muted,
     required this.line,
@@ -137,8 +157,10 @@ class _ReligionCard extends StatelessWidget {
   });
 
   final ReligionModel religion;
+  final String displayName;
   final bool isSelected;
   final bool isDark;
+  final bool isUrdu;
   final Color fg;
   final Color muted;
   final Color line;
@@ -187,10 +209,15 @@ class _ReligionCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              religion.name,
-              style: GoogleFonts.cormorantGaramond(
-                color: fg, fontSize: 18, fontWeight: FontWeight.w500, letterSpacing: -0.2,
-              ),
+              displayName,
+              style: isUrdu
+                  ? GoogleFonts.notoNastaliqUrdu(
+                      color: fg, fontSize: 17, fontWeight: FontWeight.w500, height: 1.3,
+                    )
+                  : GoogleFonts.cormorantGaramond(
+                      color: fg, fontSize: 18, fontWeight: FontWeight.w500, letterSpacing: -0.2,
+                    ),
+              textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
             ),
             const SizedBox(height: 3),
             Text(
