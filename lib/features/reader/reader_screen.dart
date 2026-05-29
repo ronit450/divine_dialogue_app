@@ -42,6 +42,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _showTranslit = true;
   bool _dismissedEndCard = false;
   bool _waitingForDownload = false;
+  bool _searching = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -63,17 +66,38 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _onlyOriginal => !_showTranslation && !_showTranslit;
+
+  List<ScriptureVerse> get _displayVerses {
+    if (!_searching || _searchQuery.isEmpty) return _verses;
+    final q = _searchQuery.toLowerCase();
+    return _verses.where((v) =>
+      v.translation.toLowerCase().contains(q) ||
+      (v.original?.toLowerCase().contains(q) ?? false) ||
+      (v.transliteration?.toLowerCase().contains(q) ?? false) ||
+      (v.groupLabel?.toLowerCase().contains(q) ?? false)
+    ).toList();
+  }
+
   bool get _isPagedType =>
       _meta!.type == ScriptureTextType.ggs ||
       _meta!.type == ScriptureTextType.dasam ||
       _meta!.type == ScriptureTextType.bgv ||
       _meta!.type == ScriptureTextType.hadith ||
-      _meta!.type == ScriptureTextType.ramayana;
+      _meta!.type == ScriptureTextType.ramayana ||
+      _meta!.type == ScriptureTextType.bani;
 
   bool get _isSikhType =>
       _meta!.type == ScriptureTextType.ggs ||
       _meta!.type == ScriptureTextType.dasam ||
-      _meta!.type == ScriptureTextType.bgv;
+      _meta!.type == ScriptureTextType.bgv ||
+      _meta!.type == ScriptureTextType.bani;
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -105,11 +129,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Future<List<ScriptureVerse>> _loadPagedVerses(int page) {
     return switch (_meta!.type) {
-      ScriptureTextType.ggs    => _repo.loadGgsAng(page),
-      ScriptureTextType.dasam  => _repo.loadDasamPage(page),
-      ScriptureTextType.bgv    => _repo.loadBgvVaar(page),
+      ScriptureTextType.ggs      => _repo.loadGgsAng(page),
+      ScriptureTextType.dasam    => _repo.loadDasamPage(page),
+      ScriptureTextType.bgv      => _repo.loadBgvVaar(page),
       ScriptureTextType.hadith   => _repo.loadHadithChapter(widget.textId, page),
       ScriptureTextType.ramayana => _repo.loadRamayanaSarga(page),
+      ScriptureTextType.bani     => _repo.loadBani(widget.textId),
       _ => Future.value([]),
     };
   }
@@ -297,31 +322,69 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: fg),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  Expanded(
-                    child: Text(
-                      _meta != null ? _title : '',
-                      style: GoogleFonts.cormorantGaramond(
-                        fontSize: 18, fontWeight: FontWeight.w500,
-                        fontStyle: FontStyle.italic, color: fg,
+                  if (_searching) ...[
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        autofocus: true,
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                        style: GoogleFonts.inter(fontSize: 14, color: fg),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: 'Search verses...',
+                          hintStyle: GoogleFonts.inter(fontSize: 14, color: muted),
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: _openReadingOptions,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: accent.withValues(alpha: 0.3)),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _searching = false;
+                        _searchQuery = '';
+                        _searchCtrl.clear();
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        margin: const EdgeInsets.only(right: 10),
+                        child: Icon(Icons.close_rounded, size: 18, color: muted),
                       ),
-                      child: Icon(Icons.tune_rounded, size: 14, color: accent),
                     ),
-                  ),
+                  ] else ...[
+                    Expanded(
+                      child: Text(
+                        _meta != null ? _title : '',
+                        style: GoogleFonts.cormorantGaramond(
+                          fontSize: 18, fontWeight: FontWeight.w500,
+                          fontStyle: FontStyle.italic, color: fg,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _searching = true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        margin: const EdgeInsets.only(right: 4),
+                        child: Icon(Icons.search_rounded, size: 18, color: muted),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _openReadingOptions,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: accent.withValues(alpha: 0.3)),
+                        ),
+                        child: Icon(Icons.tune_rounded, size: 14, color: accent),
+                      ),
+                    ),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -350,21 +413,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ? Center(child: CircularProgressIndicator(strokeWidth: 1.5, color: accent))
                   : _verses.isEmpty
                       ? Center(child: Text('No content available', style: GoogleFonts.inter(color: muted, fontSize: 13)))
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
-                          itemCount: _verses.length,
-                          separatorBuilder: (_, _) => Divider(height: 1, color: line),
-                          itemBuilder: (_, i) => _VerseCard(
-                            verse: _verses[i],
-                            type: _meta!.type,
-                            accent: accent,
-                            fg: fg,
-                            muted: muted,
-                            showTranslation: _showTranslation,
-                            showTranslit: _showTranslit,
-                            onLongPress: () => _showVerseOptions(_verses[i]),
-                          ),
-                        ),
+                      : _searching && _searchQuery.isNotEmpty && _displayVerses.isEmpty
+                          ? Center(child: Text('No verses found', style: GoogleFonts.inter(color: muted, fontSize: 13)))
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
+                              itemCount: _displayVerses.length,
+                              separatorBuilder: (_, _) => _onlyOriginal
+                                  ? const SizedBox.shrink()
+                                  : Divider(height: 1, color: line),
+                              itemBuilder: (_, i) => _VerseCard(
+                                verse: _displayVerses[i],
+                                type: _meta!.type,
+                                accent: accent,
+                                fg: fg,
+                                muted: muted,
+                                showTranslation: _showTranslation,
+                                showTranslit: _showTranslit,
+                                onlyOriginal: _onlyOriginal,
+                                onLongPress: () => _showVerseOptions(_displayVerses[i]),
+                              ),
+                            ),
             ),
             if (showEndCard)
               _EndCard(
@@ -515,6 +583,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ScriptureTextType.bgv      => 'Bhai Gurdas Vaaran $_currentChapter',
     ScriptureTextType.hadith   => '${_meta!.title} — ${verse.groupLabel ?? 'Chapter $_currentChapter'}',
     ScriptureTextType.ramayana => 'Valmiki Ramayana — Sarga $_currentChapter, Verse ${verse.number}',
+    ScriptureTextType.bani     => '${_meta!.title} — Line ${verse.number}',
   };
 
   void _askAboutVerse(ScriptureVerse verse) {
@@ -661,6 +730,7 @@ class _VerseCard extends StatelessWidget {
     required this.muted,
     required this.showTranslation,
     required this.showTranslit,
+    required this.onlyOriginal,
     this.onLongPress,
   });
 
@@ -671,6 +741,7 @@ class _VerseCard extends StatelessWidget {
   final Color muted;
   final bool showTranslation;
   final bool showTranslit;
+  final bool onlyOriginal;
   final VoidCallback? onLongPress;
 
   @override
@@ -680,6 +751,7 @@ class _VerseCard extends StatelessWidget {
       ScriptureTextType.ggs      => _sikhCard(),
       ScriptureTextType.dasam    => _sikhCard(),
       ScriptureTextType.bgv      => _sikhCard(),
+      ScriptureTextType.bani     => _sikhCard(),
       ScriptureTextType.gita     => _gitaCard(),
       ScriptureTextType.bible    => _bibleCard(),
       ScriptureTextType.hadith   => _hadithCard(),
@@ -698,7 +770,7 @@ class _VerseCard extends StatelessWidget {
     final narrator = parts.isNotEmpty ? parts[0].trim() : '';
     final grade = parts.length > 1 ? parts[1].trim() : '';
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 20.0 : 14.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -753,7 +825,7 @@ class _VerseCard extends StatelessWidget {
   }
 
   Widget _quranCard() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 24.0 : 18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -793,7 +865,7 @@ class _VerseCard extends StatelessWidget {
       );
 
   Widget _sikhCard() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 20.0 : 14.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -832,7 +904,7 @@ class _VerseCard extends StatelessWidget {
       );
 
   Widget _gitaCard() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 22.0 : 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

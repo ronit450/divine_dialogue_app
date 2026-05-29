@@ -9,11 +9,34 @@ import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../core/models/reading_plan.dart';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  bool _searching = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _searching = false;
+      _searchQuery = '';
+      _searchCtrl.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(religionProvider);
     final religions = state.religions;
     final selectedReligion = state.selectedReligion;
@@ -36,6 +59,14 @@ class LibraryScreen extends ConsumerWidget {
 
     final accent = ReligionColors.accent(activeReligion.id);
 
+    final filteredTexts = _searching && _searchQuery.isNotEmpty
+        ? activeReligion.texts.where((t) {
+            final q = _searchQuery.toLowerCase();
+            return t.title.toLowerCase().contains(q) ||
+                t.description.toLowerCase().contains(q);
+          }).toList()
+        : <SacredTextModel>[];
+
     return Scaffold(
       backgroundColor: bg,
       body: CustomScrollView(
@@ -49,58 +80,109 @@ class LibraryScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        GestureDetector(
-                          onTap: () => context.go('/home'),
-                          child: Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: line),
+                        if (_searching) ...[
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: line),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.search_rounded, size: 16, color: muted),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchCtrl,
+                                      autofocus: true,
+                                      onChanged: (v) => setState(() => _searchQuery = v),
+                                      style: GoogleFonts.inter(fontSize: 14, color: fg),
+                                      decoration: InputDecoration(
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                        hintText: 'Search texts...',
+                                        hintStyle: GoogleFonts.inter(fontSize: 14, color: muted),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'LIBRARY',
-                                style: GoogleFonts.jetBrainsMono(
-                                  color: muted,
-                                  fontSize: 10,
-                                  letterSpacing: 2,
-                                ),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: _closeSearch,
+                            child: Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: line),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                activeReligion.name,
-                                style: GoogleFonts.cormorantGaramond(
-                                  color: fg,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w500,
-                                  fontStyle: FontStyle.italic,
-                                ),
+                              child: Icon(Icons.close_rounded, size: 16, color: fg),
+                            ),
+                          ),
+                        ] else ...[
+                          GestureDetector(
+                            onTap: () => context.go('/home'),
+                            child: Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: line),
                               ),
-                            ],
+                              child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
+                            ),
                           ),
-                        ),
-                        Container(
-                          width: 36, height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: line),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'LIBRARY',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: muted,
+                                    fontSize: 10,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  activeReligion.name,
+                                  style: GoogleFonts.cormorantGaramond(
+                                    color: fg,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: Icon(Icons.search_rounded, size: 17, color: muted),
-                        ),
+                          GestureDetector(
+                            onTap: () => setState(() => _searching = true),
+                            child: Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: line),
+                              ),
+                              child: Icon(Icons.search_rounded, size: 17, color: muted),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tap any text to begin reading.',
-                      style: GoogleFonts.inter(color: muted, fontSize: 13),
-                    ),
+                    if (!_searching) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap any text to begin reading.',
+                        style: GoogleFonts.inter(color: muted, fontSize: 13),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -108,73 +190,113 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ),
 
-          // Hero card for primary text
-          if (activeReligion.texts.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
+          // Search results
+          if (_searching && _searchQuery.isNotEmpty) ...[
+            if (filteredTexts.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'No texts found.',
+                    style: GoogleFonts.inter(color: muted, fontSize: 14),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Builder(builder: (context) {
-                  final primaryText = activeReligion.texts.first;
-                  final plan = planState.planForText(primaryText.id);
-                  if (plan != null) {
-                    return _PlanHeroCard(
-                      plan: plan,
-                      text: primaryText,
-                      religion: activeReligion,
-                      accent: accent,
-                      fg: fg,
-                      muted: muted,
-                    );
-                  }
-                  return _HeroTextCard(
-                    text: primaryText,
-                    religion: activeReligion,
-                    accent: accent,
-                    isSelected: primaryText.id == state.selectedText?.id,
-                    downloadInfo: downloadState[primaryText.id],
-                  );
-                }),
-              ),
-            ),
-
-          // Other texts
-          if (activeReligion.texts.length > 1) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                child: Text(
-                  'OTHER TEXTS · ${activeReligion.texts.length - 1}',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: muted, fontSize: 9, letterSpacing: 2,
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final text = filteredTexts[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _TextListTile(
+                          text: text,
+                          accent: accent,
+                          fg: fg,
+                          muted: muted,
+                          line: line,
+                          surface: surface,
+                          onTap: () => context.push('/read/${text.id}'),
+                          plan: planState.planForText(text.id),
+                          downloadInfo: downloadState[text.id],
+                        ),
+                      );
+                    },
+                    childCount: filteredTexts.length,
                   ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    final text = activeReligion.texts[i + 1];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _TextListTile(
-                        text: text,
+          ] else ...[
+            // Hero card for primary text
+            if (activeReligion.texts.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Builder(builder: (context) {
+                    final primaryText = activeReligion.texts.first;
+                    final plan = planState.planForText(primaryText.id);
+                    if (plan != null) {
+                      return _PlanHeroCard(
+                        plan: plan,
+                        text: primaryText,
+                        religion: activeReligion,
                         accent: accent,
                         fg: fg,
                         muted: muted,
-                        line: line,
-                        surface: surface,
-                        onTap: () => context.push('/read/${text.id}'),
-                        plan: planState.planForText(text.id),
-                        downloadInfo: downloadState[text.id],
-                      ),
+                      );
+                    }
+                    return _HeroTextCard(
+                      text: primaryText,
+                      religion: activeReligion,
+                      accent: accent,
+                      isSelected: primaryText.id == state.selectedText?.id,
+                      downloadInfo: downloadState[primaryText.id],
                     );
-                  },
-                  childCount: activeReligion.texts.length - 1,
+                  }),
                 ),
               ),
-            ),
+
+            // Other texts
+            if (activeReligion.texts.length > 1) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                  child: Text(
+                    'OTHER TEXTS · ${activeReligion.texts.length - 1}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: muted, fontSize: 9, letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final text = activeReligion.texts[i + 1];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _TextListTile(
+                          text: text,
+                          accent: accent,
+                          fg: fg,
+                          muted: muted,
+                          line: line,
+                          surface: surface,
+                          onTap: () => context.push('/read/${text.id}'),
+                          plan: planState.planForText(text.id),
+                          downloadInfo: downloadState[text.id],
+                        ),
+                      );
+                    },
+                    childCount: activeReligion.texts.length - 1,
+                  ),
+                ),
+              ),
+            ],
           ],
 
           const SliverToBoxAdapter(child: SizedBox(height: 48)),

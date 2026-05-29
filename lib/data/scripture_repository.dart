@@ -14,13 +14,43 @@ class ScriptureRepository {
   Future<List<ScriptureChapter>> loadChapters(String textId) async {
     if (_cache.containsKey(textId)) return _cache[textId]!;
     final chapters = switch (textId) {
-      'quran' => await _loadQuran(),
+      'quran'        => await _loadQuran(),
       'bhagavad_gita' => await _loadGita(),
-      'bible_nrsv' => await _loadBible(),
+      'bible_nrsv'   => await _loadBible(),
+      _ when ScriptureTextMeta.forTextId(textId)?.type == ScriptureTextType.bani =>
+          await _loadBani(textId),
       _ => <ScriptureChapter>[],
     };
     _cache[textId] = chapters;
     return chapters;
+  }
+
+  Future<List<ScriptureVerse>> loadBani(String textId) async {
+    _pageCache.putIfAbsent(textId, () => {});
+    if (_pageCache[textId]!.containsKey(1)) return _pageCache[textId]![1]!;
+    final token = textId.replaceAll('_', '-');
+    final raw = await _readFile('banis/$token.json');
+    final list = jsonDecode(raw) as List<dynamic>;
+    final verses = <ScriptureVerse>[];
+    for (int i = 0; i < list.length; i++) {
+      final v = list[i] as Map<String, dynamic>;
+      verses.add(ScriptureVerse(
+        number: i + 1,
+        original: v['g'] as String?,
+        transliteration: (v['t'] as String?)?.isNotEmpty == true ? v['t'] as String : null,
+        translation: v['e'] as String? ?? '',
+        isGroupStart: v.containsKey('h'),
+        groupLabel: v['h']?.toString(),
+      ));
+    }
+    _pageCache[textId]![1] = verses;
+    return verses;
+  }
+
+  Future<List<ScriptureChapter>> _loadBani(String textId) async {
+    final verses = await loadBani(textId);
+    final meta = ScriptureTextMeta.forTextId(textId)!;
+    return [ScriptureChapter(number: 1, name: meta.title, verses: verses)];
   }
 
   Future<List<ScriptureVerse>> loadGgsAng(int ang) async =>
@@ -36,9 +66,15 @@ class ScriptureRepository {
       _loadPagedText('valmiki_ramayana', sarga, 'valmiki_ramayana', 'ramayana', 648, 50,
           chunkLoader: _loadRamayanaChunk);
 
-  Future<List<ScriptureVerse>> loadHadithChapter(String textId, int chapter) async =>
-      _loadPagedText(textId, chapter, textId, textId, _hadithChapterCount(textId), 10,
-          chunkLoader: _loadHadithChunk);
+  Future<List<ScriptureVerse>> loadHadithChapter(String textId, int chapter) async {
+    final dir = switch (textId) {
+      'nawawi_40' => 'nawawi',
+      'qudsi_40'  => 'qudsi',
+      _           => textId,
+    };
+    return _loadPagedText(textId, chapter, dir, dir, _hadithChapterCount(textId), 10,
+        chunkLoader: _loadHadithChunk);
+  }
 
   int _hadithChapterCount(String textId) => switch (textId) {
     'bukhari'   => 97,

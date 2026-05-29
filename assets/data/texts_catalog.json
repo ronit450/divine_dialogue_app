@@ -13,7 +13,10 @@
         {"id": "abu_dawud", "title": "Sunan Abu Dawud", "description": "Hadith · 5,276 narrations · 43 chapters", "category": "hadith"},
         {"id": "tirmidhi", "title": "Jami' at-Tirmidhi", "description": "Hadith · 4,053 narrations · 49 chapters", "category": "hadith"},
         {"id": "nasai", "title": "Sunan an-Nasai", "description": "Hadith · 5,768 narrations · 52 chapters", "category": "hadith"},
-        {"id": "ibn_majah", "title": "Sunan Ibn Majah", "description": "Hadith · 4,345 narrations · 38 chapters", "category": "hadith"}
+        {"id": "ibn_majah", "title": "Sunan Ibn Majah", "description": "Hadith · 4,345 narrations · 38 chapters", "category": "hadith"},
+        {"id": "malik", "title": "Muwatta Imam Malik", "description": "Hadith · 1,985 narrations · 61 chapters", "category": "hadith"},
+        {"id": "nawawi_40", "title": "40 Hadith Nawawi", "description": "Hadith · 42 narrations", "category": "hadith"},
+        {"id": "qudsi_40", "title": "40 Hadith Qudsi", "description": "Hadith · 40 sacred narrations", "category": "hadith"}
       ]
     },
     {
@@ -36,7 +39,27 @@
       "texts": [
         {"id": "guru_granth_sahib", "title": "Sri Guru Granth Sahib Ji", "description": "1,430 angs · 60,403 lines", "category": "scripture"},
         {"id": "dasam_granth", "title": "Dasam Bani", "description": "1,428 pages · Guru Gobind Singh Ji", "category": "scripture"},
-        {"id": "bhai_gurdas_vaaran", "title": "Bhai Gurdas Ji Vaaran", "description": "40 vaaran · 7,383 lines", "category": "scripture"}
+        {"id": "bhai_gurdas_vaaran", "title": "Bhai Gurdas Ji Vaaran", "description": "40 vaaran · 7,383 lines", "category": "scripture"},
+        {"id": "japji_sahib", "title": "Japji Sahib", "description": "Nitnem · 40 pauris · Guru Nanak Dev Ji", "category": "nitnem"},
+        {"id": "jaap_sahib", "title": "Jaap Sahib", "description": "Nitnem · 199 verses · Guru Gobind Singh Ji", "category": "nitnem"},
+        {"id": "tav_prasad_savaiye", "title": "Tav Prasad Savaiye", "description": "Nitnem · 10 savaiye · Guru Gobind Singh Ji", "category": "nitnem"},
+        {"id": "anand_sahib", "title": "Anand Sahib", "description": "Nitnem · 40 pauris · Guru Amar Das Ji", "category": "nitnem"},
+        {"id": "rehraas_sahib", "title": "Rehraas Sahib", "description": "Nitnem · evening prayer", "category": "nitnem"},
+        {"id": "chaupai_sahib", "title": "Benatee Chaupai Sahib", "description": "Nitnem · Guru Gobind Singh Ji", "category": "nitnem"},
+        {"id": "kirtan_sohila", "title": "Kirtan Sohila", "description": "Nitnem · bedtime prayer", "category": "nitnem"},
+        {"id": "sukhmani_sahib", "title": "Sukhmani Sahib", "description": "Nitnem · 24 ashtpadis · Guru Arjan Dev Ji", "category": "nitnem"},
+        {"id": "aarti", "title": "Aarti (Gagan Mein Thaal)", "description": "Gurbani · Guru Nanak Dev Ji", "category": "gurbani"},
+        {"id": "asa_di_var", "title": "Asa Di Var", "description": "Gurbani · 24 pauris · Guru Nanak Dev Ji", "category": "gurbani"},
+        {"id": "dukh_bhanjani", "title": "Dukh Bhanjani Sahib", "description": "Gurbani · Guru Arjan Dev Ji", "category": "gurbani"},
+        {"id": "sidh_gosht", "title": "Sidh Gosht", "description": "Gurbani · 73 pauris · Guru Nanak Dev Ji", "category": "gurbani"},
+        {"id": "shabad_hazare", "title": "Shabad Hazare", "description": "Gurbani · Guru Nanak Dev Ji", "category": "gurbani"},
+        {"id": "salok_mahala_9", "title": "Salok Mahala 9", "description": "Gurbani · Guru Tegh Bahadur Ji", "category": "gurbani"},
+        {"id": "baavan_akhree", "title": "Baavan Akhree", "description": "Gurbani · Guru Arjan Dev Ji", "category": "gurbani"},
+        {"id": "barah_maha_manjh", "title": "Barah Maha Manjh", "description": "Gurbani · 12 months · Guru Nanak Dev Ji", "category": "gurbani"},
+        {"id": "akaal_ustat", "title": "Akaal Ustat", "description": "Dasam Granth · Guru Gobind Singh Ji", "category": "dasam_granth"},
+        {"id": "shabad_hazare_patshahi_10", "title": "Shabad Hazare Patshahi 10", "description": "Dasam Granth · Guru Gobind Singh Ji", "category": "dasam_granth"},
+        {"id": "ardas", "title": "Ardas", "description": "The Sikh prayer", "category": "ardas"},
+        {"id": "laavan", "title": "Laavan (Anand Karaj)", "description": "Wedding ceremony · 4 rounds · Guru Ram Das Ji", "category": "anand_karaj"}
       ]
     },
     {
