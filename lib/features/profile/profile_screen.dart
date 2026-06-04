@@ -226,13 +226,12 @@ class ProfileScreen extends ConsumerWidget {
                           Divider(height: 1, color: line),
                           _ActionRow(
                             icon: Icons.text_fields_rounded,
-                            label: 'Change font size',
+                            label: 'Change font',
                             fg: fg,
                             muted: muted,
                             line: line,
                             onTap: () => _showFontSizePicker(
                               context: context,
-                              ref: ref,
                               accent: accent,
                               fg: fg,
                               muted: muted,
@@ -682,7 +681,6 @@ class _TextPickerSheet extends ConsumerWidget {
 
 void _showFontSizePicker({
   required BuildContext context,
-  required WidgetRef ref,
   required Color accent,
   required Color fg,
   required Color muted,
@@ -701,7 +699,6 @@ void _showFontSizePicker({
       fg: fg,
       muted: muted,
       bg: bg,
-      ref: ref,
     ),
   );
 }
@@ -712,15 +709,13 @@ class _FontSizeSheet extends ConsumerWidget {
     required this.fg,
     required this.muted,
     required this.bg,
-    required this.ref,
   });
 
   final Color accent, fg, muted, bg;
-  final WidgetRef ref;
 
   @override
-  Widget build(BuildContext context, WidgetRef consumerRef) {
-    final current = consumerRef.watch(fontScaleProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(fontScaleProvider);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -739,13 +734,16 @@ class _FontSizeSheet extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 32),
-          Text(
-            'Aa',
-            style: GoogleFonts.cormorantGaramond(
-              color: fg,
-              fontSize: 36 * current.factor,
-              fontWeight: FontWeight.w500,
-              fontStyle: FontStyle.italic,
+          MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+            child: Text(
+              'Aa',
+              style: GoogleFonts.cormorantGaramond(
+                color: fg,
+                fontSize: 36 * current.factor,
+                fontWeight: FontWeight.w500,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -754,7 +752,7 @@ class _FontSizeSheet extends ConsumerWidget {
             accent: accent,
             muted: muted,
             fg: fg,
-            onSelect: (scale) => consumerRef.read(fontScaleProvider.notifier).set(scale),
+            onSelect: (scale) => ref.read(fontScaleProvider.notifier).set(scale),
           ),
           const SizedBox(height: 8),
         ],
