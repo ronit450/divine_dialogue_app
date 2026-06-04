@@ -362,14 +362,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               chatTitle: _chatStarted ? chatState.session?.title : null,
             ),
             if (religion != null && !_chatStarted)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                child: _VerseCard(
-                  religionId: religion.id,
-                  accent: accent,
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
+              MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: _VerseCard(
+                    religionId: religion.id,
+                    accent: accent,
+                    isDark: isDark,
+                    fg: fg,
+                    muted: muted,
+                  ),
                 ),
               ),
             Expanded(
@@ -392,14 +395,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         line: line,
                         textId: chatState.session?.textId,
                       )
-                    : _IdleContent(
-                        key: const ValueKey('idle'),
-                        religionId: religion?.id,
-                        salutation: salutation,
-                        firstName: firstName,
-                        accent: accent,
-                        fg: fg,
-                        muted: muted,
+                    : MediaQuery(
+                        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+                        child: _IdleContent(
+                          key: const ValueKey('idle'),
+                          religionId: religion?.id,
+                          salutation: salutation,
+                          firstName: firstName,
+                          accent: accent,
+                          fg: fg,
+                          muted: muted,
+                        ),
                       ),
               ),
             ),

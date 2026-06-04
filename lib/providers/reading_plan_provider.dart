@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/reading_plan.dart';
 import '../data/reading_plan_repository.dart';
@@ -138,8 +140,8 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
   }
 
   Future<void> deletePlan(String planId) async {
-    await _repo.deleteRemotePlan(planId);
     await _save(state.plans.where((p) => p.id != planId).toList());
+    unawaited(_repo.deleteRemotePlan(planId));
   }
 }
 
