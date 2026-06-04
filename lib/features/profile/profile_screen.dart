@@ -230,13 +230,16 @@ class ProfileScreen extends ConsumerWidget {
                             fg: fg,
                             muted: muted,
                             line: line,
-                            onTap: () => _showFontSizePicker(
-                              context: context,
-                              accent: accent,
-                              fg: fg,
-                              muted: muted,
-                              isDark: isDark,
-                            ),
+                            onTap: () {
+                              if (!context.mounted) return;
+                              _showFontSizePicker(
+                                context: context,
+                                accent: accent,
+                                fg: fg,
+                                muted: muted,
+                                isDark: isDark,
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -698,7 +701,6 @@ void _showFontSizePicker({
       accent: accent,
       fg: fg,
       muted: muted,
-      bg: bg,
     ),
   );
 }
@@ -708,10 +710,9 @@ class _FontSizeSheet extends ConsumerWidget {
     required this.accent,
     required this.fg,
     required this.muted,
-    required this.bg,
   });
 
-  final Color accent, fg, muted, bg;
+  final Color accent, fg, muted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
