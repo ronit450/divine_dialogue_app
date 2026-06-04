@@ -56,8 +56,8 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   }
 
   Future<void> clearAll() async {
-    await ChatRepository.instance.clearAll();
     state = state.copyWith(sessions: []);
+    unawaited(ChatRepository.instance.clearAll());
   }
 
   static List<ChatSession> _sorted(List<ChatSession> sessions) {
