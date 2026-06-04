@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/religion_provider.dart';
 import 'providers/download_provider.dart';
+import 'providers/font_scale_provider.dart';
 
 class App extends ConsumerWidget {
   const App({super.key});
@@ -13,6 +14,7 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final fontScale = ref.watch(fontScaleProvider);
 
     ref.listen<ReligionState>(religionProvider, (prev, next) {
       if (next.selectedReligion != null &&
@@ -30,6 +32,12 @@ class App extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(fontScale.factor),
+        ),
+        child: child!,
+      ),
     );
   }
 }

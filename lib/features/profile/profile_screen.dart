@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/font_scale_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -211,14 +212,34 @@ class ProfileScreen extends ConsumerWidget {
                       surface: surface,
                       line: line,
                       isDark: isDark,
-                      child: _ToggleRow(
-                        icon: Icons.dark_mode_rounded,
-                        label: 'Dark mode',
-                        value: themeMode == ThemeMode.dark,
-                        accent: accent,
-                        fg: fg,
-                        muted: muted,
-                        onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+                      child: Column(
+                        children: [
+                          _ToggleRow(
+                            icon: Icons.dark_mode_rounded,
+                            label: 'Dark mode',
+                            value: themeMode == ThemeMode.dark,
+                            accent: accent,
+                            fg: fg,
+                            muted: muted,
+                            onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.text_fields_rounded,
+                            label: 'Change font size',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => _showFontSizePicker(
+                              context: context,
+                              ref: ref,
+                              accent: accent,
+                              fg: fg,
+                              muted: muted,
+                              isDark: isDark,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -655,6 +676,171 @@ class _TextPickerSheet extends ConsumerWidget {
         ),
         SizedBox(height: MediaQuery.of(context).viewInsets.bottom + 24),
       ],
+    );
+  }
+}
+
+void _showFontSizePicker({
+  required BuildContext context,
+  required WidgetRef ref,
+  required Color accent,
+  required Color fg,
+  required Color muted,
+  required bool isDark,
+}) {
+  final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: bg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => _FontSizeSheet(
+      accent: accent,
+      fg: fg,
+      muted: muted,
+      bg: bg,
+      ref: ref,
+    ),
+  );
+}
+
+class _FontSizeSheet extends ConsumerWidget {
+  const _FontSizeSheet({
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.bg,
+    required this.ref,
+  });
+
+  final Color accent, fg, muted, bg;
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context, WidgetRef consumerRef) {
+    final current = consumerRef.watch(fontScaleProvider);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        24, 0, 24, MediaQuery.of(context).viewInsets.bottom + 40,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: muted.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Aa',
+            style: GoogleFonts.cormorantGaramond(
+              color: fg,
+              fontSize: 36 * current.factor,
+              fontWeight: FontWeight.w500,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 32),
+          _FontScaleTrack(
+            current: current,
+            accent: accent,
+            muted: muted,
+            fg: fg,
+            onSelect: (scale) => consumerRef.read(fontScaleProvider.notifier).set(scale),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _FontScaleTrack extends StatelessWidget {
+  const _FontScaleTrack({
+    required this.current,
+    required this.accent,
+    required this.muted,
+    required this.fg,
+    required this.onSelect,
+  });
+
+  final FontScale current;
+  final Color accent, muted, fg;
+  final ValueChanged<FontScale> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final scales = FontScale.values;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return SizedBox(
+          height: 48,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 1.5,
+                  color: muted.withValues(alpha: 0.25),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: scales.asMap().entries.map((e) {
+                  final scale = e.value;
+                  final isActive = scale == current;
+                  return GestureDetector(
+                    onTap: () => onSelect(scale),
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: width / scales.length,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: isActive ? 14 : 10,
+                            height: isActive ? 14 : 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isActive ? accent : Colors.transparent,
+                              border: Border.all(
+                                color: isActive ? accent : muted.withValues(alpha: 0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            scale.label,
+                            style: GoogleFonts.jetBrainsMono(
+                              color: isActive ? accent : muted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
