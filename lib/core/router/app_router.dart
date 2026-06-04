@@ -18,6 +18,7 @@ import '../../features/report_issue/report_issue_screen.dart';
 import '../../features/reader/reader_screen.dart';
 import '../../features/reading_plans/reading_plans_screen.dart';
 import '../../features/reading_plans/plan_detail_screen.dart';
+import '../../features/saved_verses/saved_verses_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
@@ -110,6 +111,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => PlanDetailScreen(
           planId: state.pathParameters['planId']!,
         ),
+      ),
+      GoRoute(
+        path: '/saved-verses',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const SavedVersesScreen(),
       ),
       GoRoute(
         path: '/read/:textId',
