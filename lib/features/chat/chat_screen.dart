@@ -12,6 +12,10 @@ import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/chat_message.dart';
 import '../../services/assembly_ai_service.dart';
+import '../../core/models/saved_verse.dart';
+import '../../core/models/scripture.dart';
+import '../../providers/saved_verses_provider.dart';
+import '../../services/share_service.dart';
 import 'voice/voice_recorder.dart';
 
 enum VoiceState { idle, recording, silenceError, processing }
@@ -854,7 +858,7 @@ int? _parseChapterFromReference(String reference) {
   return match != null ? int.tryParse(match.group(1)!) : null;
 }
 
-class _PassageCard extends StatelessWidget {
+class _PassageCard extends ConsumerWidget {
   const _PassageCard({
     required this.citation,
     required this.accent,
@@ -874,9 +878,14 @@ class _PassageCard extends StatelessWidget {
   final String? textId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cardBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
     final hasOriginal = citation.originalText.isNotEmpty;
+    final chapter = _parseChapterFromReference(citation.reference);
+    final verseId = SavedVerse.makeId(textId ?? '', chapter ?? 0, 0);
+    final isSaved = textId != null &&
+        ref.watch(savedVersesProvider
+            .select((list) => list.any((v) => v.id == verseId)));
     final canNavigate = textId != null;
 
     return GestureDetector(
@@ -926,6 +935,43 @@ class _PassageCard extends StatelessWidget {
                 if (canNavigate) ...[
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right_rounded, size: 14, color: accent),
+                ],
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => showShareSheet(
+                    context,
+                    text: hasOriginal ? citation.originalText : citation.translation,
+                    reference: citation.reference,
+                    religionId: textId != null
+                        ? (ScriptureTextMeta.forTextId(textId!)?.religionId ?? '')
+                        : '',
+                    translation: hasOriginal ? citation.translation : null,
+                  ),
+                  child: Icon(Icons.ios_share_rounded, size: 14, color: muted),
+                ),
+                if (textId != null) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => ref.read(savedVersesProvider.notifier).toggle(
+                          SavedVerse(
+                            id: verseId,
+                            textId: textId!,
+                            reference: citation.reference,
+                            text: hasOriginal
+                                ? citation.originalText
+                                : citation.translation,
+                            translation: hasOriginal ? citation.translation : null,
+                            savedAt: DateTime.now(),
+                          ),
+                        ),
+                    child: Icon(
+                      isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 14,
+                      color: isSaved ? accent : muted,
+                    ),
+                  ),
                 ],
               ],
             ),

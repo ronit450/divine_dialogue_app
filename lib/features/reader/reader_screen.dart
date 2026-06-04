@@ -12,7 +12,9 @@ import '../../providers/chat_provider.dart';
 import '../../providers/reading_plan_provider.dart';
 import '../../core/models/reading_plan.dart';
 import '../../providers/download_provider.dart';
-import '../../data/user_repository.dart';
+import '../../core/models/saved_verse.dart';
+import '../../providers/saved_verses_provider.dart';
+import '../../services/share_service.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
 class ReaderScreen extends ConsumerStatefulWidget {
@@ -49,6 +51,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPrefs();
     _meta = ScriptureTextMeta.forTextId(widget.textId);
     if (_meta == null) {
       _error = 'Unsupported text: ${widget.textId}';
@@ -64,6 +67,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _showTranslation = prefs.getBool('reader_show_translation') ?? true;
+      _showTranslit = prefs.getBool('reader_show_translit') ?? true;
+    });
   }
 
   @override
@@ -220,15 +232,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _optionRow('Translation', _showTranslation, accent, fg, line, (v) {
+              _optionRow('Translation', _showTranslation, accent, fg, line, (v) async {
                 setState(() => _showTranslation = v);
                 setSheet(() {});
+                final prefs = await SharedPreferences.getInstance();
+                prefs.setBool('reader_show_translation', v);
               }),
               Divider(height: 1, color: line),
               if (_meta?.hasTransliteration ?? false)
-                _optionRow('Transliteration', _showTranslit, accent, fg, line, (v) {
+                _optionRow('Transliteration', _showTranslit, accent, fg, line, (v) async {
                   setState(() => _showTranslit = v);
                   setSheet(() {});
+                  final prefs = await SharedPreferences.getInstance();
+                  prefs.setBool('reader_show_translit', v);
                 }),
             ],
           ),
@@ -415,24 +431,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       ? Center(child: Text('No content available', style: GoogleFonts.inter(color: muted, fontSize: 13)))
                       : _searching && _searchQuery.isNotEmpty && _displayVerses.isEmpty
                           ? Center(child: Text('No verses found', style: GoogleFonts.inter(color: muted, fontSize: 13)))
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
-                              itemCount: _displayVerses.length,
-                              separatorBuilder: (_, _) => _onlyOriginal
-                                  ? const SizedBox.shrink()
-                                  : Divider(height: 1, color: line),
-                              itemBuilder: (_, i) => _VerseCard(
-                                verse: _displayVerses[i],
-                                type: _meta!.type,
-                                accent: accent,
-                                fg: fg,
-                                muted: muted,
-                                showTranslation: _showTranslation,
-                                showTranslit: _showTranslit,
-                                onlyOriginal: _onlyOriginal,
-                                onLongPress: () => _showVerseOptions(_displayVerses[i]),
-                              ),
-                            ),
+                          : (_onlyOriginal && _isSikhType)
+                              ? _buildGurbaniParagraphView(accent, fg)
+                              : ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
+                                  itemCount: _displayVerses.length,
+                                  separatorBuilder: (_, _) => _onlyOriginal
+                                      ? const SizedBox.shrink()
+                                      : Divider(height: 1, color: line),
+                                  itemBuilder: (_, i) => _VerseCard(
+                                    verse: _displayVerses[i],
+                                    type: _meta!.type,
+                                    accent: accent,
+                                    fg: fg,
+                                    muted: muted,
+                                    showTranslation: _showTranslation,
+                                    showTranslit: _showTranslit,
+                                    onlyOriginal: _onlyOriginal,
+                                    onLongPress: () => _showVerseOptions(_displayVerses[i]),
+                                  ),
+                                ),
             ),
             if (showEndCard)
               _EndCard(
@@ -614,20 +632,39 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   Future<void> _saveVerse(ScriptureVerse verse) async {
-    await UserRepository.instance.saveVerse(
+    final id = SavedVerse.makeId(widget.textId, _currentChapter, verse.number);
+    final notifier = ref.read(savedVersesProvider.notifier);
+    final wasSaved = notifier.isSaved(id);
+    await notifier.toggle(SavedVerse(
+      id: id,
       textId: widget.textId,
       reference: _verseReference(verse),
-      text: verse.translation,
-    );
+      text: verse.original ?? verse.translation,
+      translation: verse.original != null ? verse.translation : null,
+      savedAt: DateTime.now(),
+    ));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Verse saved', style: GoogleFonts.inter(fontSize: 13)),
+          content: Text(
+            wasSaved ? 'Verse removed from saved' : 'Verse saved',
+            style: GoogleFonts.inter(fontSize: 13),
+          ),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
         ),
       );
     }
+  }
+
+  void _shareVerse(ScriptureVerse verse) {
+    showShareSheet(
+      context,
+      text: verse.original ?? verse.translation,
+      reference: _verseReference(verse),
+      religionId: _meta!.religionId,
+      translation: verse.original != null ? verse.translation : null,
+    );
   }
 
   void _showVerseOptions(ScriptureVerse verse) {
@@ -704,12 +741,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
               Divider(height: 1, color: muted.withValues(alpha: 0.15)),
               _DialogOption(
-                icon: Icons.bookmark_border_rounded,
-                label: 'Save verse',
+                icon: ref.watch(savedVersesProvider.select((list) => list.any(
+                      (v) => v.id == SavedVerse.makeId(widget.textId, _currentChapter, verse.number),
+                    )))
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                label: ref.watch(savedVersesProvider.select((list) => list.any(
+                      (v) => v.id == SavedVerse.makeId(widget.textId, _currentChapter, verse.number),
+                    )))
+                    ? 'Remove from saved'
+                    : 'Save verse',
                 color: fg,
                 onTap: () {
                   Navigator.pop(ctx);
                   _saveVerse(verse);
+                },
+              ),
+              Divider(height: 1, color: muted.withValues(alpha: 0.15)),
+              _DialogOption(
+                icon: Icons.ios_share_rounded,
+                label: 'Share verse',
+                color: fg,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _shareVerse(verse);
                 },
               ),
               const SizedBox(height: 8),
@@ -717,6 +772,79 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // Groups flat verse list into pauri-sized chunks for paragraph rendering.
+  // Splits at: section-title verses (start with ॥), isGroupStart, or pauri-end (ends ॥N॥).
+  static List<List<ScriptureVerse>> _groupIntoPauris(List<ScriptureVerse> verses) {
+    final groups = <List<ScriptureVerse>>[];
+    var current = <ScriptureVerse>[];
+    bool flushNext = false;
+
+    for (final v in verses) {
+      final isSectionTitle = v.original?.trimLeft().startsWith('॥') ?? false;
+      final isPauriEnd = RegExp(r'॥[੦-੯]+॥\s*$').hasMatch(v.original ?? '');
+
+      if (current.isNotEmpty && (flushNext || v.isGroupStart || isSectionTitle)) {
+        groups.add(List.from(current));
+        current = [];
+      }
+
+      current.add(v);
+      flushNext = isPauriEnd || isSectionTitle;
+    }
+    if (current.isNotEmpty) groups.add(current);
+    return groups;
+  }
+
+  Widget _buildGurbaniParagraphView(Color accent, Color fg) {
+    final groups = _groupIntoPauris(_displayVerses);
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 80),
+      itemCount: groups.length,
+      itemBuilder: (_, i) {
+        final verses = groups[i];
+        if (verses.isEmpty) return const SizedBox.shrink();
+
+        final first = verses.first;
+        final isSectionTitle = first.original?.trimLeft().startsWith('॥') ?? false;
+
+        if (isSectionTitle) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              first.original ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                height: 1.9,
+                color: accent,
+              ),
+            ),
+          );
+        }
+
+        final combined = verses
+            .where((v) => v.original != null)
+            .map((v) => v.original!)
+            .join(' ');
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Text(
+            combined,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: first.isGroupStart ? FontWeight.w700 : FontWeight.normal,
+              height: 1.9,
+              color: accent,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -864,44 +992,71 @@ class _VerseCard extends StatelessWidget {
         ),
       );
 
-  Widget _sikhCard() => Padding(
-        padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 20.0 : 14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (verse.isGroupStart && (verse.groupLabel?.isNotEmpty ?? false))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  verse.groupLabel!.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(fontSize: 8, letterSpacing: 2, color: muted),
-                ),
+  Widget _sikhCard() {
+    // For non-GGS: section title = original Gurmukhi text that opens with ॥ (e.g. ॥ ਜਪੁ ॥)
+    final isSectionTitle = type != ScriptureTextType.ggs &&
+        (verse.original?.trimLeft().startsWith('॥') ?? false);
+
+    // Pauri-end verse: Gurmukhi ends with ॥<Gurmukhi numeral(s)>॥ e.g. ॥੧॥
+    final isPauriEnd = type != ScriptureTextType.ggs &&
+        RegExp(r'॥[੦-੯]+॥\s*$').hasMatch(verse.original ?? '');
+
+    // First verse of a new pauri that isn't itself a section title → bold Gurmukhi
+    final isNewPauriStart =
+        type != ScriptureTextType.ggs && verse.isGroupStart && !isSectionTitle;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        top: isSectionTitle ? 16.0 : (onlyOriginal ? 4.0 : 8.0),
+        bottom: isPauriEnd ? 20.0 : (onlyOriginal ? 4.0 : 8.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // GGS only: small muted ang/pauri label
+          if (type == ScriptureTextType.ggs &&
+              verse.isGroupStart &&
+              (verse.groupLabel?.isNotEmpty ?? false))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                verse.groupLabel!.toUpperCase(),
+                style: GoogleFonts.jetBrainsMono(fontSize: 8, letterSpacing: 2, color: muted),
               ),
-            if (verse.original != null)
-              Text(
-                verse.original!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 17, height: 1.9, color: accent),
+            ),
+          if (verse.original != null)
+            Text(
+              verse.original!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: isSectionTitle ? 19.0 : 17.0,
+                fontWeight: (isSectionTitle || isNewPauriStart)
+                    ? FontWeight.w700
+                    : FontWeight.normal,
+                height: 1.9,
+                color: accent,
               ),
-            if (showTranslit && verse.transliteration != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                verse.transliteration!,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 12, height: 1.6,
-                  color: fg.withValues(alpha: 0.6),
-                  fontStyle: FontStyle.italic,
-                ),
+            ),
+          if (showTranslit && verse.transliteration != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              verse.transliteration!,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 12, height: 1.6,
+                color: fg.withValues(alpha: 0.6),
+                fontStyle: FontStyle.italic,
               ),
-            ],
-            if (showTranslation) ...[
-              const SizedBox(height: 6),
-              Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
-            ],
+            ),
           ],
-        ),
-      );
+          if (showTranslation) ...[
+            const SizedBox(height: 6),
+            Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _gitaCard() => Padding(
         padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 22.0 : 16.0),

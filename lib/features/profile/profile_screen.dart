@@ -144,13 +144,26 @@ class ProfileScreen extends ConsumerWidget {
                       surface: surface,
                       line: line,
                       isDark: isDark,
-                      child: _ActionRow(
-                        icon: Icons.menu_book_rounded,
-                        label: 'Reading plan',
-                        fg: fg,
-                        muted: muted,
-                        line: line,
-                        onTap: () => context.push('/reading-plans'),
+                      child: Column(
+                        children: [
+                          _ActionRow(
+                            icon: Icons.bookmark_border_rounded,
+                            label: 'Saved verses',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.push('/saved-verses'),
+                          ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.menu_book_rounded,
+                            label: 'Reading plan',
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => context.push('/reading-plans'),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
