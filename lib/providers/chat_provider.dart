@@ -214,6 +214,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       List<Citation> citations = [];
       List<dynamic> newContext = [];
       var lastRender = DateTime.now();
+      // Track when each phase first became visible to enforce minimum display
+      // durations. Cloud Functions buffer all SSE events before flushing, so
+      // without these delays every intermediate state collapses into one frame.
+      DateTime? preambleFirstAt;
+      DateTime? toolCallAt;
+      var answerStarted = false;
 
       DivineApi.instance.cancelCurrentRequest();
 
@@ -229,27 +235,44 @@ class ChatNotifier extends StateNotifier<ChatState> {
       )) {
         if (event is ApiStreamStatus) {
           final msg = event.message;
-          // Per spec: any status starting with "Searching" marks the tool-call
-          // block as visible for the rest of this turn (and after `done`).
           final flipTool = msg.startsWith('Searching') && !state.hasToolCall;
+          // Keep preamble visible for >=500 ms before the tool-call block
+          // appears. No-op when the server already streams at natural pace.
+          if (flipTool && preambleFirstAt != null) {
+            final elapsed = DateTime.now().difference(preambleFirstAt).inMilliseconds;
+            if (elapsed < 500) {
+              await Future<void>.delayed(Duration(milliseconds: 500 - elapsed));
+            }
+          }
           state = state.copyWith(
             statusMessage: msg,
             hasToolCall: flipTool ? true : null,
           );
+          if (flipTool) toolCallAt = DateTime.now();
         } else if (event is ApiStreamPassage) {
           state = state.copyWith(
             streamingPassages: [...state.streamingPassages, event.citation],
           );
         } else if (event is ApiStreamChunk) {
           if (event.phase == 'preamble') {
+            preambleFirstAt ??= DateTime.now();
             preambleBuffer.write(event.text);
-            // Preamble arrives in ~600ms — paint each delta immediately so the
-            // bubble feels responsive.
             state = state.copyWith(
               isTyping: false,
               streamingPreamble: preambleBuffer.toString(),
             );
           } else {
+            // Keep the tool-call spinner visible for >=500 ms before answer
+            // text begins streaming in.
+            if (!answerStarted) {
+              answerStarted = true;
+              if (state.hasToolCall && toolCallAt != null) {
+                final elapsed = DateTime.now().difference(toolCallAt).inMilliseconds;
+                if (elapsed < 500) {
+                  await Future<void>.delayed(Duration(milliseconds: 500 - elapsed));
+                }
+              }
+            }
             answerBuffer.write(event.text);
             final now = DateTime.now();
             if (now.difference(lastRender).inMilliseconds >= 50) {

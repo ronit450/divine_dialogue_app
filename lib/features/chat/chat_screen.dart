@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show sin, pi;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -610,10 +611,13 @@ class _AgentBubble extends StatelessWidget {
                     color: accent, size: 13),
               ),
               Flexible(
+                flex: 1,
+                fit: isStreaming ? FlexFit.tight : FlexFit.loose,
                 child: Container(
-                  constraints: BoxConstraints(
-                      maxWidth:
-                          MediaQuery.of(context).size.width * 0.78),
+                  constraints: isStreaming
+                      ? null
+                      : BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.78),
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                   decoration: BoxDecoration(
                     color: aiBg,
@@ -667,8 +671,8 @@ class _AgentBubble extends StatelessWidget {
                           showCursor: isStreaming,
                         ),
 
-                      // Initial loading dots — only when nothing has streamed yet
-                      if (showLoadingDots) _LoadingDots(color: muted),
+                      // Initial loading state — visible before any preamble arrives
+                      if (showLoadingDots) _ThinkingIndicator(accent: accent, muted: muted),
                     ],
                   ),
                 ),
@@ -803,6 +807,7 @@ class _ToolCallBlock extends StatelessWidget {
         : 'Found $passageCount passage${passageCount == 1 ? '' : 's'}';
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: blockBg,
@@ -960,21 +965,26 @@ class _PassageCard extends StatelessWidget {
   }
 }
 
-// ─── Loading dots (initial pre-preamble state) ───────────────────────────────
+// ─── Thinking indicator (initial pre-preamble state) ─────────────────────────
+//
+// Bouncing-dots pattern (like WhatsApp/iMessage "typing"), with "Thinking…"
+// label. The bubble is forced full-width via FlexFit.tight when isStreaming,
+// so this indicator fills the bubble rather than shrinking to dot width.
 
-class _LoadingDots extends StatefulWidget {
-  const _LoadingDots({required this.color});
-  final Color color;
+class _ThinkingIndicator extends StatefulWidget {
+  const _ThinkingIndicator({required this.accent, required this.muted});
+  final Color accent;
+  final Color muted;
 
   @override
-  State<_LoadingDots> createState() => _LoadingDotsState();
+  State<_ThinkingIndicator> createState() => _ThinkingIndicatorState();
 }
 
-class _LoadingDotsState extends State<_LoadingDots>
+class _ThinkingIndicatorState extends State<_ThinkingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: const Duration(milliseconds: 1050),
   )..repeat();
 
   @override
@@ -987,26 +997,48 @@ class _LoadingDotsState extends State<_LoadingDots>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, _) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(3, (i) {
-          final opacity = ((_ctrl.value * 3 - i) % 1).clamp(0.25, 1.0);
-          return Padding(
-            padding: EdgeInsets.only(right: i == 2 ? 0 : 4),
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: widget.color,
+      builder: (_, _) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Three bouncing dots, staggered by 1/3 cycle each
+              ...List.generate(3, (i) {
+                final phase = (_ctrl.value - i / 3.0 + 1.0) % 1.0;
+                // Smooth half-sine bounce: up in first 40% of cycle, rest idle
+                final t = (phase / 0.4).clamp(0.0, 1.0);
+                final bounce = sin(t * pi).clamp(0.0, 1.0);
+                return Padding(
+                  padding: EdgeInsets.only(right: i < 2 ? 5.0 : 0),
+                  child: Transform.translate(
+                    offset: Offset(0, -bounce * 6),
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.accent
+                            .withValues(alpha: 0.35 + bounce * 0.65),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(width: 10),
+              Text(
+                'Thinking…',
+                style: GoogleFonts.inter(
+                  color: widget.muted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            ),
-          );
-        }),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
