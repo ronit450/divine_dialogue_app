@@ -28,67 +28,78 @@ Future<void> showShareSheet(
 
   await showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: bg,
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (ctx) => Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: muted.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
-          RepaintBoundary(
-            key: cardKey,
-            child: ShareCard(
-              text: text,
-              reference: reference,
-              religionId: religionId,
-              translation: translation,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
+    builder: (ctx) {
+      final maxHeight = MediaQuery.of(ctx).size.height * 0.85;
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: _SheetButton(
-                  label: 'Share text',
-                  icon: Icons.short_text_rounded,
-                  fg: fg,
-                  line: line,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    Share.share(
-                        '$text\n\n— $reference\n\nShared via Divine Dialogue');
-                  },
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: muted.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SheetButton(
-                  label: 'Share image',
-                  icon: Icons.image_outlined,
-                  fg: fg,
-                  line: line,
-                  accent: accent,
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    await _captureAndShare(cardKey, reference);
-                  },
+              const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: RepaintBoundary(
+                    key: cardKey,
+                    child: ShareCard(
+                      text: text,
+                      reference: reference,
+                      religionId: religionId,
+                      translation: translation,
+                    ),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetButton(
+                      label: 'Share text',
+                      icon: Icons.short_text_rounded,
+                      fg: fg,
+                      line: line,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Share.share(
+                            '$text\n\n— $reference\n\nShared via Divine Dialogue');
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SheetButton(
+                      label: 'Share image',
+                      icon: Icons.image_outlined,
+                      fg: fg,
+                      line: line,
+                      accent: accent,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await _captureAndShare(cardKey, reference);
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 
