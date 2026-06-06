@@ -68,8 +68,8 @@ class ScriptureTextMeta {
   static ScriptureTextMeta? forTextId(String textId) => switch (textId) {
     'quran' => const ScriptureTextMeta(
         id: 'quran', title: 'The Qurʼan', religionId: 'islam',
-        type: ScriptureTextType.quran, chapterLabel: 'Surah',
-        verseLabel: 'Ayah', totalChapters: 114),
+        type: ScriptureTextType.quran, chapterLabel: 'Page',
+        verseLabel: 'Ayah', totalChapters: 780),
     'guru_granth_sahib' => const ScriptureTextMeta(
         id: 'guru_granth_sahib', title: 'Sri Guru Granth Sahib Ji', religionId: 'sikhism',
         type: ScriptureTextType.ggs, chapterLabel: 'Ang',

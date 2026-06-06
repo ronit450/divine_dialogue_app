@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../core/models/scripture.dart';
+import '../core/models/quran_page_mapper.dart';
 
 class ScriptureRepository {
   ScriptureRepository._();
@@ -10,6 +11,7 @@ class ScriptureRepository {
   final Map<String, List<ScriptureChapter>> _cache = {};
   final Map<String, Map<int, List<ScriptureVerse>>> _pageCache = {};
   final Map<String, Set<int>> _loadedChunks = {};
+  List<ScriptureChapter>? _quranChapters;
 
   Future<List<ScriptureChapter>> loadChapters(String textId) async {
     if (_cache.containsKey(textId)) return _cache[textId]!;
@@ -61,6 +63,11 @@ class ScriptureRepository {
 
   Future<List<ScriptureVerse>> loadBgvVaar(int vaar) async =>
       _loadPagedText('bhai_gurdas_vaaran', vaar, 'bgv', 'bgv', 40, 10);
+
+  Future<List<ScriptureVerse>> loadQuranPage(int page) async {
+    _quranChapters ??= await loadChapters('quran');
+    return QuranPageMapper.buildPageVerses(page, _quranChapters!);
+  }
 
   Future<List<ScriptureVerse>> loadRamayanaSarga(int sarga) async =>
       _loadPagedText('valmiki_ramayana', sarga, 'valmiki_ramayana', 'ramayana', 648, 50,
