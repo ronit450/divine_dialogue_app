@@ -19,7 +19,7 @@ class ApiStreamPassage extends ApiStreamEvent {
 class ApiStreamChunk extends ApiStreamEvent {
   ApiStreamChunk(this.text, {this.phase = 'answer'});
   final String text;
-  final String phase; // "preamble" | "answer"
+  final String phase; // "preamble" | "answer" | "unknown" (when field is absent)
 }
 
 class ApiStreamDone extends ApiStreamEvent {
