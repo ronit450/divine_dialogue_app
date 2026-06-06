@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models/scripture.dart';
+import '../../core/models/quran_page_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
@@ -87,6 +88,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   bool get _onlyOriginal => !_showTranslation && !_showTranslit;
+
+  int get _effectiveUnitForPlan {
+    if (_meta?.type == ScriptureTextType.quran) {
+      return QuranPageMapper.surahToPage(_currentChapter);
+    }
+    return _currentChapter;
+  }
 
   List<ScriptureVerse> get _displayVerses {
     if (!_searching || _searchQuery.isEmpty) return _verses;
@@ -318,7 +326,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final showEndCard = plan != null &&
         !plan.todayDone &&
         !_dismissedEndCard &&
-        _currentChapter >= plan.todayEndUnit;
+        _effectiveUnitForPlan >= plan.todayEndUnit;
 
     if (_error != null) {
       return Scaffold(

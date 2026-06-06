@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class TextReadingMeta {
   static const _counts = <String, int>{
-    'quran': 604,
+    'quran': 780,
     'guru_granth_sahib': 1430,
     'dasam_granth': 1428,
     'bhai_gurdas_vaaran': 40,
