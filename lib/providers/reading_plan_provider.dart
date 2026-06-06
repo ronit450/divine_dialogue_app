@@ -143,6 +143,16 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
     await _save(state.plans.where((p) => p.id != planId).toList());
     unawaited(_repo.deleteRemotePlan(planId));
   }
+
+  Future<void> updateLastRead(String planId, int unit) async {
+    final updated = state.plans
+        .map((p) => p.id == planId ? p.copyWith(lastReadUnit: unit) : p)
+        .toList();
+    state = state.copyWith(plans: updated);
+    await _repo.savePlans(updated);
+    final changed = updated.firstWhere((p) => p.id == planId);
+    unawaited(_repo.upsertRemotePlan(changed));
+  }
 }
 
 final readingPlanProvider =

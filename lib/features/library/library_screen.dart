@@ -8,6 +8,7 @@ import '../../providers/download_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../core/models/reading_plan.dart';
+import '../../core/models/quran_page_mapper.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -218,7 +219,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           muted: muted,
                           line: line,
                           surface: surface,
-                          onTap: () => context.push('/read/${text.id}'),
+                          onTap: () {
+                            final plan = planState.planForText(text.id);
+                            if (plan != null) {
+                              _showReadOrPlanSheet(
+                                  context, text.id, plan, accent, fg, muted, bg, line, surface);
+                            } else {
+                              context.push('/read/${text.id}');
+                            }
+                          },
                           plan: planState.planForText(text.id),
                           downloadInfo: downloadState[text.id],
                         ),
@@ -245,6 +254,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         accent: accent,
                         fg: fg,
                         muted: muted,
+                        bg: bg,
+                        line: line,
+                        surface: surface,
                       );
                     }
                     return _HeroTextCard(
@@ -286,7 +298,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           muted: muted,
                           line: line,
                           surface: surface,
-                          onTap: () => context.push('/read/${text.id}'),
+                          onTap: () {
+                            final plan = planState.planForText(text.id);
+                            if (plan != null) {
+                              _showReadOrPlanSheet(
+                                  context, text.id, plan, accent, fg, muted, bg, line, surface);
+                            } else {
+                              context.push('/read/${text.id}');
+                            }
+                          },
                           plan: planState.planForText(text.id),
                           downloadInfo: downloadState[text.id],
                         ),
@@ -304,6 +324,117 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
     );
   }
+}
+
+void _showReadOrPlanSheet(
+  BuildContext context,
+  String textId,
+  ReadingPlan plan,
+  Color accent,
+  Color fg,
+  Color muted,
+  Color bg,
+  Color line,
+  Color surface,
+) {
+  final int readerChapter = textId == 'quran'
+      ? QuranPageMapper.pageToSurah(plan.todayStartUnit)
+      : plan.todayStartUnit;
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: bg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: muted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'OPEN AS',
+            style: GoogleFonts.jetBrainsMono(
+                color: muted, fontSize: 9, letterSpacing: 1.5),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            plan.textTitle,
+            style: GoogleFonts.cormorantGaramond(
+              color: fg, fontSize: 22,
+              fontWeight: FontWeight.w500, fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(ctx).pop();
+              context.push('/read/$textId', extra: {'chapter': readerChapter});
+            },
+            child: Container(
+              width: double.infinity, height: 56,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Continue Plan',
+                      style: GoogleFonts.inter(
+                          color: Colors.white, fontSize: 15,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Day ${plan.dayNumber} · ${plan.unitLabel} ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                      style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(ctx).pop();
+              context.push('/read/$textId');
+            },
+            child: Container(
+              width: double.infinity, height: 50,
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: line),
+              ),
+              child: Center(
+                child: Text(
+                  'Browse',
+                  style: GoogleFonts.inter(
+                      color: fg, fontSize: 15, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _HeroTextCard extends StatelessWidget {
@@ -473,12 +604,15 @@ class _PlanHeroCard extends StatelessWidget {
     required this.accent,
     required this.fg,
     required this.muted,
+    required this.bg,
+    required this.line,
+    required this.surface,
   });
 
   final ReadingPlan plan;
   final SacredTextModel text;
   final ReligionModel religion;
-  final Color accent, fg, muted;
+  final Color accent, fg, muted, bg, line, surface;
 
   String _watermarkGlyph(String id) => switch (id) {
     'sikhism'      => 'ਆਦਿ ਸਚੁ',
@@ -491,9 +625,8 @@ class _PlanHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push(
-        '/read/${text.id}',
-        extra: {'chapter': plan.todayStartUnit},
+      onTap: () => _showReadOrPlanSheet(
+        context, text.id, plan, accent, fg, muted, bg, line, surface,
       ),
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -578,7 +711,7 @@ class _PlanHeroCard extends StatelessWidget {
                     Text(
                       plan.todayDone
                           ? 'DAY ${plan.dayNumber} DONE ✓'
-                          : 'TODAY · ${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                          : 'TODAY · ${plan.unitLabel.toUpperCase()} ${plan.todayStartUnit}–${plan.todayEndUnit}',
                       style: GoogleFonts.jetBrainsMono(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 9, letterSpacing: 1.2,

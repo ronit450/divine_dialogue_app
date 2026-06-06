@@ -8,63 +8,65 @@
 
 **Tech Stack:** Firebase Storage (`firebase_storage ^12.x`), `path_provider` (already in pubspec), Riverpod `StateNotifierProvider`, `dart:io` `File`, `LinearProgressIndicator` / `CircularProgressIndicator`.
 
----
+***
 
 ## File Map
 
-| Status | Path | Responsibility |
-|---|---|---|
-| **Create** | `lib/data/scripture_storage_map.dart` | Static map: textId → list of relative file paths |
-| **Create** | `lib/data/storage_repository.dart` | Firebase Storage download + local file existence check |
-| **Create** | `lib/providers/download_provider.dart` | Per-textId `DownloadInfo` state + background download logic |
-| **Modify** | `lib/data/scripture_repository.dart` | Swap `rootBundle` for local file reader (rootBundle fallback kept until assets removed) |
-| **Modify** | `lib/app.dart` | `ref.listen` on religionProvider to trigger background downloads on religion change |
-| **Modify** | `lib/features/library/library_screen.dart` | Pass `DownloadInfo?` into `_HeroTextCard` and `_TextListTile`; show progress indicators |
-| **Modify** | `lib/features/reader/reader_screen.dart` | Add `_waitingForDownload` flag; show downloading UI; auto-start `_load()` when download completes |
-| **Modify** | `pubspec.yaml` | Add `firebase_storage`; (Task 9 only) remove bundled scripture asset declarations |
+| Status     | Path                                       | Responsibility                                                                                    |
+| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **Create** | `lib/data/scripture_storage_map.dart`      | Static map: textId → list of relative file paths                                                  |
+| **Create** | `lib/data/storage_repository.dart`         | Firebase Storage download + local file existence check                                            |
+| **Create** | `lib/providers/download_provider.dart`     | Per-textId `DownloadInfo` state + background download logic                                       |
+| **Modify** | `lib/data/scripture_repository.dart`       | Swap `rootBundle` for local file reader (rootBundle fallback kept until assets removed)           |
+| **Modify** | `lib/app.dart`                             | `ref.listen` on religionProvider to trigger background downloads on religion change               |
+| **Modify** | `lib/features/library/library_screen.dart` | Pass `DownloadInfo?` into `_HeroTextCard` and `_TextListTile`; show progress indicators           |
+| **Modify** | `lib/features/reader/reader_screen.dart`   | Add `_waitingForDownload` flag; show downloading UI; auto-start `_load()` when download completes |
+| **Modify** | `pubspec.yaml`                             | Add `firebase_storage`; (Task 9 only) remove bundled scripture asset declarations                 |
 
----
+***
 
 ## Task 1: Add `firebase_storage` dependency
 
 **Files:**
-- Modify: `pubspec.yaml`
 
-- [ ] **Step 1: Add the package**
+* Modify: `pubspec.yaml`
+
+* [ ] **Step 1: Add the package**
 
 Open `pubspec.yaml`. In the `dependencies:` block, after `cloud_firestore: ^5.6.12`, add:
 
-```yaml
+```YAML
   firebase_storage: ^12.3.0
 ```
 
-- [ ] **Step 2: Install**
+* [ ] **Step 2: Install**
 
-```bash
+```Shell
 flutter pub get
 ```
 
 Expected: resolves without version conflicts. If there's a conflict, run `flutter pub outdated` and adjust the version to one compatible with `firebase_core ^3.x`.
 
-- [ ] **Step 3: Commit**
+* [ ] **Step 3: Commit**
 
-```bash
+```Shell
 git add pubspec.yaml pubspec.lock
 git commit -m "chore: add firebase_storage dependency"
 ```
 
----
+***
 
 ## Task 2: Create `ScriptureStorageMap`
 
 **Files:**
-- Create: `lib/data/scripture_storage_map.dart`
+
+* Create: `lib/data/scripture_storage_map.dart`
 
 This is a pure static mapping with no dependencies. It must match the actual filenames in `assets/data/scripture/` exactly, since they will be mirrored on Firebase Storage.
 
-- [ ] **Step 1: Create the file**
+* [ ] **Step 1: Create the file**
 
-```dart
+```Dart
 class ScriptureStorageMap {
   ScriptureStorageMap._();
 
@@ -97,9 +99,9 @@ class ScriptureStorageMap {
 }
 ```
 
-- [ ] **Step 2: Verify chunk counts match reality**
+* [ ] **Step 2: Verify chunk counts match reality**
 
-```bash
+```Shell
 ls assets/data/scripture/ggs/ | wc -l            # Expected: 15
 ls assets/data/scripture/dasam/ | wc -l          # Expected: 15
 ls assets/data/scripture/bgv/ | wc -l            # Expected: 4
@@ -114,31 +116,32 @@ ls assets/data/scripture/ibn_majah/ | wc -l      # Expected: 4
 
 If any count is off, update the corresponding number in `_chunks(...)` in `scripture_storage_map.dart`.
 
-- [ ] **Step 3: Run analyzer**
+* [ ] **Step 3: Run analyzer**
 
-```bash
+```Shell
 dart analyze lib/data/scripture_storage_map.dart
 ```
 
 Expected: no issues.
 
-- [ ] **Step 4: Commit**
+* [ ] **Step 4: Commit**
 
-```bash
+```Shell
 git add lib/data/scripture_storage_map.dart
 git commit -m "feat: add ScriptureStorageMap — textId to file path mapping"
 ```
 
----
+***
 
 ## Task 3: Create `StorageRepository`
 
 **Files:**
-- Create: `lib/data/storage_repository.dart`
 
-- [ ] **Step 1: Create the file**
+* Create: `lib/data/storage_repository.dart`
 
-```dart
+* [ ] **Step 1: Create the file**
+
+```Dart
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
@@ -173,31 +176,32 @@ class StorageRepository {
 }
 ```
 
-- [ ] **Step 2: Analyze**
+* [ ] **Step 2: Analyze**
 
-```bash
+```Shell
 dart analyze lib/data/storage_repository.dart
 ```
 
 Expected: no issues.
 
-- [ ] **Step 3: Commit**
+* [ ] **Step 3: Commit**
 
-```bash
+```Shell
 git add lib/data/storage_repository.dart
 git commit -m "feat: add StorageRepository — Firebase Storage download + local file management"
 ```
 
----
+***
 
 ## Task 4: Create `DownloadProvider`
 
 **Files:**
-- Create: `lib/providers/download_provider.dart`
 
-- [ ] **Step 1: Create the file**
+* Create: `lib/providers/download_provider.dart`
 
-```dart
+* [ ] **Step 1: Create the file**
+
+```Dart
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/religion.dart';
@@ -281,41 +285,44 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadInfo>> {
 }
 ```
 
-- [ ] **Step 2: Analyze**
+* [ ] **Step 2: Analyze**
 
-```bash
+```Shell
 dart analyze lib/providers/download_provider.dart
 ```
 
 Expected: no issues.
 
-- [ ] **Step 3: Commit**
+* [ ] **Step 3: Commit**
 
-```bash
+```Shell
 git add lib/providers/download_provider.dart
 git commit -m "feat: add DownloadProvider — per-text background download state management"
 ```
 
----
+***
 
 ## Task 5: Modify `ScriptureRepository` to read local files
 
 **Files:**
-- Modify: `lib/data/scripture_repository.dart`
+
+* Modify: `lib/data/scripture_repository.dart`
 
 Add a `_readFile(relativePath)` helper that checks local documents directory first, then falls back to `rootBundle`. The fallback is removed in Task 9.
 
-- [ ] **Step 1: Update imports at the top of `scripture_repository.dart`**
+* [ ] **Step 1: Update imports at the top of** **`scripture_repository.dart`**
 
 Replace:
-```dart
+
+```Dart
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../core/models/scripture.dart';
 ```
 
 With:
-```dart
+
+```Dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -323,11 +330,11 @@ import 'package:path_provider/path_provider.dart';
 import '../core/models/scripture.dart';
 ```
 
-- [ ] **Step 2: Add `_readFile` helper inside `ScriptureRepository` class**
+* [ ] **Step 2: Add** **`_readFile`** **helper inside** **`ScriptureRepository`** **class**
 
 Add this method inside `ScriptureRepository`, after the `_loadPagedText` method (after the closing `}` of `_loadPagedText` around line 69):
 
-```dart
+```Dart
   // Reads a scripture file from local storage if present, otherwise falls
   // back to the bundled asset. The rootBundle fallback is removed in Task 9.
   Future<String> _readFile(String relativePath) async {
@@ -338,102 +345,120 @@ Add this method inside `ScriptureRepository`, after the `_loadPagedText` method 
   }
 ```
 
-- [ ] **Step 3: Update `_loadChunk` (line ~77)**
+* [ ] **Step 3: Update** **`_loadChunk`** **(line \~77)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
 ```
 
 To:
-```dart
+
+```Dart
     final raw = await _readFile('$dir/${prefix}_$label.json');
 ```
 
-- [ ] **Step 4: Update `_loadRamayanaChunk` (line ~107)**
+* [ ] **Step 4: Update** **`_loadRamayanaChunk`** **(line \~107)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
 ```
+
 To:
-```dart
+
+```Dart
     final raw = await _readFile('$dir/${prefix}_$label.json');
 ```
 
-- [ ] **Step 5: Update `_loadHadithChunk` (line ~135)**
+* [ ] **Step 5: Update** **`_loadHadithChunk`** **(line \~135)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/$dir/${prefix}_$label.json');
 ```
+
 To:
-```dart
+
+```Dart
     final raw = await _readFile('$dir/${prefix}_$label.json');
 ```
 
-- [ ] **Step 6: Update `_loadQuran` (line ~157)**
+* [ ] **Step 6: Update** **`_loadQuran`** **(line \~157)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/quran.json');
 ```
+
 To:
-```dart
+
+```Dart
     final raw = await _readFile('quran.json');
 ```
 
-- [ ] **Step 7: Update `_loadGita` (line ~183)**
+* [ ] **Step 7: Update** **`_loadGita`** **(line \~183)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/gita.json');
 ```
+
 To:
-```dart
+
+```Dart
     final raw = await _readFile('gita.json');
 ```
 
-- [ ] **Step 8: Update `_loadBible` (line ~207)**
+* [ ] **Step 8: Update** **`_loadBible`** **(line \~207)**
 
 Change:
-```dart
+
+```Dart
     final raw = await rootBundle.loadString('assets/data/scripture/bible.json');
 ```
+
 To:
-```dart
+
+```Dart
     final raw = await _readFile('bible.json');
 ```
 
-- [ ] **Step 9: Analyze and hot-reload test**
+* [ ] **Step 9: Analyze and hot-reload test**
 
-```bash
+```Shell
 dart analyze lib/data/scripture_repository.dart
 ```
 
 Expected: no issues. Hot-reload the app and open any scripture — it should still work because `_readFile` falls back to `rootBundle` while the files are still bundled.
 
-- [ ] **Step 10: Commit**
+* [ ] **Step 10: Commit**
 
-```bash
+```Shell
 git add lib/data/scripture_repository.dart
 git commit -m "feat: scripture_repository reads local files first, falls back to asset bundle"
 ```
 
----
+***
 
 ## Task 6: Trigger background downloads on religion change
 
 **Files:**
-- Modify: `lib/app.dart`
+
+* Modify: `lib/app.dart`
 
 When the selected religion changes (onboarding completion OR profile religion switch), kick off background downloads for all that religion's texts. This lives in `app.dart` so `ReligionNotifier` stays free of download concerns.
 
-- [ ] **Step 1: Update `app.dart`**
+* [ ] **Step 1: Update** **`app.dart`**
 
 Replace the entire file with:
 
-```dart
+```Dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
@@ -471,50 +496,52 @@ class App extends ConsumerWidget {
 }
 ```
 
-- [ ] **Step 2: Analyze**
+* [ ] **Step 2: Analyze**
 
-```bash
+```Shell
 dart analyze lib/app.dart
 ```
 
 Expected: no issues.
 
-- [ ] **Step 3: Commit**
+* [ ] **Step 3: Commit**
 
-```bash
+```Shell
 git add lib/app.dart
 git commit -m "feat: trigger background scripture download when religion changes"
 ```
 
----
+***
 
 ## Task 7: Library screen — download status on cards
 
 **Files:**
-- Modify: `lib/features/library/library_screen.dart`
+
+* Modify: `lib/features/library/library_screen.dart`
 
 Show download state on the hero card and list tiles. Both widgets stay `StatelessWidget` — `LibraryScreen` passes `DownloadInfo?` down as a parameter.
 
-- [ ] **Step 1: Add `downloadProvider` import**
+* [ ] **Step 1: Add** **`downloadProvider`** **import**
 
 Add after the existing imports in `library_screen.dart`:
-```dart
+
+```Dart
 import '../../providers/download_provider.dart';
 ```
 
-- [ ] **Step 2: Watch `downloadProvider` in `LibraryScreen.build`**
+* [ ] **Step 2: Watch** **`downloadProvider`** **in** **`LibraryScreen.build`**
 
 After the line `final planState = ref.watch(readingPlanProvider);`, add:
 
-```dart
+```Dart
     final downloadState = ref.watch(downloadProvider);
 ```
 
-- [ ] **Step 3: Pass `downloadInfo` to `_HeroTextCard`**
+* [ ] **Step 3: Pass** **`downloadInfo`** **to** **`_HeroTextCard`**
 
 Find the `_HeroTextCard(` call and add the new parameter:
 
-```dart
+```Dart
                   return _HeroTextCard(
                     text: primaryText,
                     religion: activeReligion,
@@ -524,11 +551,11 @@ Find the `_HeroTextCard(` call and add the new parameter:
                   );
 ```
 
-- [ ] **Step 4: Pass `downloadInfo` to `_TextListTile`**
+* [ ] **Step 4: Pass** **`downloadInfo`** **to** **`_TextListTile`**
 
 Find the `_TextListTile(` call and add:
 
-```dart
+```Dart
                       child: _TextListTile(
                         text: text,
                         accent: accent,
@@ -542,11 +569,11 @@ Find the `_TextListTile(` call and add:
                       ),
 ```
 
-- [ ] **Step 5: Update `_HeroTextCard` to accept and show `downloadInfo`**
+* [ ] **Step 5: Update** **`_HeroTextCard`** **to accept and show** **`downloadInfo`**
 
 Add `downloadInfo` field and constructor parameter to `_HeroTextCard`:
 
-```dart
+```Dart
 class _HeroTextCard extends StatelessWidget {
   const _HeroTextCard({
     required this.text,
@@ -565,7 +592,7 @@ class _HeroTextCard extends StatelessWidget {
 
 In `_HeroTextCard.build`, replace the bottom section of the `Column` — from `const SizedBox(height: 22),` to the end — with:
 
-```dart
+```Dart
                 const SizedBox(height: 22),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -606,7 +633,7 @@ In `_HeroTextCard.build`, replace the bottom section of the `Column` — from `c
 
 Add this helper method inside `_HeroTextCard`:
 
-```dart
+```Dart
   Widget _downloadTrailing() {
     if (downloadInfo?.status == TextDownloadStatus.downloading) {
       return SizedBox(
@@ -644,11 +671,11 @@ Add this helper method inside `_HeroTextCard`:
   }
 ```
 
-- [ ] **Step 6: Update `_TextListTile` to accept and show `downloadInfo`**
+* [ ] **Step 6: Update** **`_TextListTile`** **to accept and show** **`downloadInfo`**
 
 Add `downloadInfo` field and constructor parameter to `_TextListTile`:
 
-```dart
+```Dart
 class _TextListTile extends StatelessWidget {
   const _TextListTile({
     required this.text,
@@ -668,13 +695,13 @@ class _TextListTile extends StatelessWidget {
 
 Replace the trailing `Icon(Icons.chevron_right_rounded, color: muted, size: 20)` at the end of the `Row` in `build` with a call to a helper:
 
-```dart
+```Dart
             _tileTrailing(),
 ```
 
 Add this helper inside `_TextListTile`:
 
-```dart
+```Dart
   Widget _tileTrailing() {
     if (downloadInfo?.status == TextDownloadStatus.downloading) {
       return SizedBox(
@@ -696,58 +723,62 @@ Add this helper inside `_TextListTile`:
   }
 ```
 
-- [ ] **Step 7: Analyze**
+* [ ] **Step 7: Analyze**
 
-```bash
+```Shell
 dart analyze lib/features/library/library_screen.dart
 ```
 
 Expected: no issues.
 
-- [ ] **Step 8: Commit**
+* [ ] **Step 8: Commit**
 
-```bash
+```Shell
 git add lib/features/library/library_screen.dart
 git commit -m "feat: library screen shows download progress on text cards"
 ```
 
----
+***
 
 ## Task 8: Reader screen — downloading state
 
 **Files:**
-- Modify: `lib/features/reader/reader_screen.dart`
+
+* Modify: `lib/features/reader/reader_screen.dart`
 
 When a text is not yet downloaded, show a centered downloading screen instead of the reader. Auto-start the reader when the download completes.
 
-- [ ] **Step 1: Add `downloadProvider` import**
+* [ ] **Step 1: Add** **`downloadProvider`** **import**
 
 Add after the existing imports:
-```dart
+
+```Dart
 import '../../providers/download_provider.dart';
 ```
 
-- [ ] **Step 2: Add `_waitingForDownload` field to `_ReaderScreenState`**
+* [ ] **Step 2: Add** **`_waitingForDownload`** **field to** **`_ReaderScreenState`**
 
 After the existing fields (`_loading`, `_error`, etc.), add:
 
-```dart
+```Dart
   bool _waitingForDownload = false;
 ```
 
-- [ ] **Step 3: Update `initState` to gate on download status**
+* [ ] **Step 3: Update** **`initState`** **to gate on download status**
 
 Find the `else` block in `initState` that calls `_load()` (the block that runs when `_meta != null`):
 
 Current:
-```dart
+
+```Dart
     } else {
       _load();
     }
 ```
 
 Replace with:
-```dart
+
+```Dart
     } else {
       final downloadStatus = ref.read(downloadProvider)[widget.textId]?.status;
       if (downloadStatus == null || downloadStatus == TextDownloadStatus.downloaded) {
@@ -761,11 +792,11 @@ Replace with:
     }
 ```
 
-- [ ] **Step 4: Add `ref.listen` in `build` to auto-start `_load()` when download completes**
+* [ ] **Step 4: Add** **`ref.listen`** **in** **`build`** **to auto-start** **`_load()`** **when download completes**
 
 At the very top of `_ReaderScreenState.build`, before the first `return` or `if` statement, add:
 
-```dart
+```Dart
     ref.listen<Map<String, DownloadInfo>>(downloadProvider, (prev, next) {
       final prevStatus = prev?[widget.textId]?.status;
       final nextStatus = next[widget.textId]?.status;
@@ -778,22 +809,22 @@ At the very top of `_ReaderScreenState.build`, before the first `return` or `if`
     });
 ```
 
-- [ ] **Step 5: Insert downloading UI check in `build`**
+* [ ] **Step 5: Insert downloading UI check in** **`build`**
 
 In `build`, after the existing `if (_error != null) return ...` check (and before the main scaffold), add:
 
-```dart
+```Dart
     if (_waitingForDownload) {
       final info = ref.watch(downloadProvider)[widget.textId];
       return _buildDownloadingScaffold(context, info);
     }
 ```
 
-- [ ] **Step 6: Add `_buildDownloadingScaffold` method**
+* [ ] **Step 6: Add** **`_buildDownloadingScaffold`** **method**
 
 Add this method to `_ReaderScreenState`:
 
-```dart
+```Dart
   Widget _buildDownloadingScaffold(BuildContext context, DownloadInfo? info) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -890,28 +921,28 @@ Add this method to `_ReaderScreenState`:
 
 Note: `ReligionColors.accent` is already imported via `'../../core/models/religion.dart'` which is in `reader_screen.dart`'s existing imports. If it's not, add `import '../../core/models/religion.dart';`.
 
-- [ ] **Step 7: Analyze**
+* [ ] **Step 7: Analyze**
 
-```bash
+```Shell
 dart analyze lib/features/reader/reader_screen.dart
 ```
 
 Expected: no issues. Fix any import issues (e.g. `ReligionColors` location).
 
-- [ ] **Step 8: Commit**
+* [ ] **Step 8: Commit**
 
-```bash
+```Shell
 git add lib/features/reader/reader_screen.dart
 git commit -m "feat: reader screen shows downloading state when scripture not yet available"
 ```
 
----
+***
 
 ## Task 9: Upload to Firebase Storage + remove bundled assets
 
 Do this **after** confirming Tasks 1–8 are working. This permanently removes the bundled files and makes the app depend on Firebase Storage.
 
-- [ ] **Step 1: Configure Firebase Storage security rules**
+* [ ] **Step 1: Configure Firebase Storage security rules**
 
 In Firebase Console → Storage → Rules:
 
@@ -927,11 +958,11 @@ service firebase.storage {
 }
 ```
 
-- [ ] **Step 2: Upload all scripture files**
+* [ ] **Step 2: Upload all scripture files**
 
 From the project root (where `assets/` lives). Replace `YOUR_BUCKET` with the bucket name from Firebase Console → Storage (format: `your-project.appspot.com`):
 
-```bash
+```Shell
 # Single-file texts
 firebase storage:upload assets/data/scripture/quran.json  scripture/quran.json  --bucket YOUR_BUCKET
 firebase storage:upload assets/data/scripture/bible.json  scripture/bible.json  --bucket YOUR_BUCKET
@@ -946,19 +977,19 @@ for dir in ggs dasam bgv valmiki_ramayana bukhari muslim abu_dawud tirmidhi nasa
 done
 ```
 
-- [ ] **Step 3: Verify upload counts**
+* [ ] **Step 3: Verify upload counts**
 
-```bash
+```Shell
 firebase storage:ls scripture/ggs/ --bucket YOUR_BUCKET | wc -l     # Expected: 15
 firebase storage:ls scripture/dasam/ --bucket YOUR_BUCKET | wc -l   # Expected: 15
 firebase storage:ls scripture/bukhari/ --bucket YOUR_BUCKET | wc -l # Expected: 10
 ```
 
-- [ ] **Step 4: Remove scripture asset declarations from `pubspec.yaml`**
+* [ ] **Step 4: Remove scripture asset declarations from** **`pubspec.yaml`**
 
 In `pubspec.yaml` under `flutter: assets:`, keep only:
 
-```yaml
+```YAML
 flutter:
   uses-material-design: true
   assets:
@@ -968,7 +999,8 @@ flutter:
 ```
 
 Delete these lines:
-```yaml
+
+```YAML
     - assets/data/scripture/quran.json
     - assets/data/scripture/bible.json
     - assets/data/scripture/gita.json
@@ -984,11 +1016,11 @@ Delete these lines:
     - assets/data/scripture/valmiki_ramayana/
 ```
 
-- [ ] **Step 5: Remove the rootBundle fallback from `ScriptureRepository._readFile`**
+* [ ] **Step 5: Remove the rootBundle fallback from** **`ScriptureRepository._readFile`**
 
 In `lib/data/scripture_repository.dart`, replace `_readFile`:
 
-```dart
+```Dart
   Future<String> _readFile(String relativePath) async {
     final dir = await getApplicationDocumentsDirectory();
     return File('${dir.path}/scripture/$relativePath').readAsString();
@@ -997,22 +1029,23 @@ In `lib/data/scripture_repository.dart`, replace `_readFile`:
 
 Also remove `import 'package:flutter/services.dart';` — `rootBundle` is no longer used.
 
-- [ ] **Step 6: Analyze**
+* [ ] **Step 6: Analyze**
 
-```bash
+```Shell
 dart analyze lib/
 ```
 
 Expected: no issues.
 
-- [ ] **Step 7: Full rebuild and end-to-end test**
+* [ ] **Step 7: Full rebuild and end-to-end test**
 
-```bash
+```Shell
 flutter clean && flutter pub get
 flutter run
 ```
 
 Test flow:
+
 1. Fresh install — go through onboarding, select Islam, tap Continue.
 2. App navigates to Home immediately (no waiting).
 3. Open Library — Quran card shows `DOWNLOADING · x%`, Bukhari shows cloud icon.
@@ -1022,9 +1055,9 @@ Test flow:
 7. Bukhari completes → reader auto-opens.
 8. Force-quit + reopen app → all Islam texts show as downloaded instantly (filesystem check).
 
-- [ ] **Step 8: Delete the bundled scripture files from repo**
+* [ ] **Step 8: Delete the bundled scripture files from repo**
 
-```bash
+```Shell
 rm assets/data/scripture/quran.json assets/data/scripture/bible.json assets/data/scripture/gita.json
 rm -rf assets/data/scripture/ggs/ assets/data/scripture/dasam/ assets/data/scripture/bgv/
 rm -rf assets/data/scripture/bukhari/ assets/data/scripture/muslim/ assets/data/scripture/abu_dawud/
@@ -1032,9 +1065,9 @@ rm -rf assets/data/scripture/tirmidhi/ assets/data/scripture/nasai/ assets/data/
 rm -rf assets/data/scripture/valmiki_ramayana/
 ```
 
-- [ ] **Step 9: Final commit**
+* [ ] **Step 9: Final commit**
 
-```bash
+```Shell
 git add -A
 git commit -m "feat: move scripture files to Firebase Storage, remove from app bundle
 
@@ -1042,22 +1075,25 @@ Reduces initial app download by ~93MB. Files are downloaded on first
 religion selection and cached permanently in local storage."
 ```
 
----
+***
 
 ## Self-Review
 
 **Spec coverage:**
-- ✅ Religion select → immediate redirect, no waiting on onboarding screen (`completeOnboarding` navigates immediately, `ref.listen` in `app.dart` fires download in background)
-- ✅ Background download with no blocking (`unawaited` in `downloadReligion`)
-- ✅ "If downloading" → consistent UI in Library (progress bar + %) and Reader (downloading scaffold with same accent color + jetBrainsMono %)
-- ✅ "If not downloaded" → cloud icon on Library cards; reader shows downloading screen
-- ✅ Religion change triggers download for new religion (same `ref.listen` path)
-- ✅ One-time download per text — skips if `downloaded` or `downloading`
-- ✅ App restart restores state from filesystem without re-downloading
+
+* ✅ Religion select → immediate redirect, no waiting on onboarding screen (`completeOnboarding` navigates immediately, `ref.listen` in `app.dart` fires download in background)
+* ✅ Background download with no blocking (`unawaited` in `downloadReligion`)
+* ✅ "If downloading" → consistent UI in Library (progress bar + %) and Reader (downloading scaffold with same accent color + jetBrainsMono %)
+* ✅ "If not downloaded" → cloud icon on Library cards; reader shows downloading screen
+* ✅ Religion change triggers download for new religion (same `ref.listen` path)
+* ✅ One-time download per text — skips if `downloaded` or `downloading`
+* ✅ App restart restores state from filesystem without re-downloading
 
 **Type consistency:**
-- `DownloadInfo` — used identically in Tasks 4, 7, 8
-- `TextDownloadStatus.{notDownloaded,downloading,downloaded,failed}` — 4 values, used consistently across all files
-- `downloadReligion(List<SacredTextModel>)` — matches `SacredTextModel` from `religion.dart`, called with `selectedReligion!.texts`
-- `ScriptureStorageMap.filesForText(textId)` — returns `List<String>`, consumed by `StorageRepository.allFilesExist` and `_downloadText`
-- `ReligionColors.accent(religionId)` — already used in `library_screen.dart`, present in `religion.dart`
+
+* `DownloadInfo` — used identically in Tasks 4, 7, 8
+* `TextDownloadStatus.{notDownloaded,downloading,downloaded,failed}` — 4 values, used consistently across all files
+* `downloadReligion(List<SacredTextModel>)` — matches `SacredTextModel` from `religion.dart`, called with `selectedReligion!.texts`
+* `ScriptureStorageMap.filesForText(textId)` — returns `List<String>`, consumed by `StorageRepository.allFilesExist` and `_downloadText`
+* `ReligionColors.accent(religionId)` — already used in `library_screen.dart`, present in `religion.dart`
+

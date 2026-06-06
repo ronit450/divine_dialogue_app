@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models/scripture.dart';
+import '../../core/models/quran_page_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/scripture_repository.dart';
 import '../../providers/scripture_provider.dart';
@@ -46,6 +47,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _waitingForDownload = false;
   bool _searching = false;
   String _searchQuery = '';
+  final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
 
   @override
@@ -80,11 +82,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    final plan = ref.read(readingPlanProvider).planForText(widget.textId);
+    if (plan != null && !_loading) {
+      ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, _currentChapter);
+    }
+    _scrollCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
   bool get _onlyOriginal => !_showTranslation && !_showTranslit;
+
+  int get _effectiveUnitForPlan {
+    if (_meta?.type == ScriptureTextType.quran) {
+      return QuranPageMapper.surahLastPage(_currentChapter);
+    }
+    return _currentChapter;
+  }
 
   List<ScriptureVerse> get _displayVerses {
     if (!_searching || _searchQuery.isEmpty) return _verses;
@@ -183,7 +197,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
     await ref.read(scripturePositionProvider.notifier).savePosition(widget.textId, num, 1);
-    if (mounted) setState(() => _loading = false);
+    final plan = ref.read(readingPlanProvider).planForText(widget.textId);
+    if (plan != null) {
+      await ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, num);
+    }
+    if (mounted) {
+      setState(() => _loading = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(0);
+      });
+    }
   }
 
   Future<void> _openToc() async {
@@ -311,7 +334,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final showEndCard = plan != null &&
         !plan.todayDone &&
         !_dismissedEndCard &&
-        _currentChapter >= plan.todayEndUnit;
+        _effectiveUnitForPlan >= plan.todayEndUnit;
 
     if (_error != null) {
       return Scaffold(
@@ -434,6 +457,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           : (_onlyOriginal && _isSikhType)
                               ? _buildGurbaniParagraphView(accent, fg)
                               : ListView.separated(
+                                  controller: _scrollCtrl,
                                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
                                   itemCount: _displayVerses.length,
                                   separatorBuilder: (_, _) => _onlyOriginal
@@ -589,6 +613,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget _navBtn({required IconData icon, required Color color, VoidCallback? onTap}) =>
       GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: SizedBox(width: 48, height: 48, child: Icon(icon, size: 17, color: color)),
       );
 
@@ -1137,7 +1162,7 @@ class _TodayBanner extends StatelessWidget {
                       color: accent, fontSize: 8, letterSpacing: 1.5),
                 ),
                 Text(
-                  '${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                  '${plan.unitLabel.toUpperCase()} ${plan.todayStartUnit}–${plan.todayEndUnit}',
                   style: GoogleFonts.inter(
                       color: fg, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
@@ -1200,7 +1225,7 @@ class _EndCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Day ${plan.dayNumber} · ${plan.unitLabel}s ${plan.todayStartUnit}–${plan.todayEndUnit}',
+            'Day ${plan.dayNumber} · ${plan.unitLabel} ${plan.todayStartUnit}–${plan.todayEndUnit}',
             style: GoogleFonts.jetBrainsMono(color: muted, fontSize: 9, letterSpacing: 0.8),
           ),
           const SizedBox(height: 16),
