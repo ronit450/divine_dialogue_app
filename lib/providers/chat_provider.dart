@@ -213,6 +213,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     unawaited(ChatRepository.instance.saveSession(withUser));
     _ref.read(historyProvider.notifier).load();
 
+    // Yield to event loop so Flutter renders the ThinkingIndicator bubble
+    // before the SSE loop begins. Without this, fast backends respond before
+    // a frame is scheduled and the thinking state never appears.
+    await Future.delayed(const Duration(milliseconds: 300));
+
     try {
       final preambleBuffer = StringBuffer();
       final answerBuffer = StringBuffer();
