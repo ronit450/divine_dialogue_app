@@ -95,7 +95,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   int get _effectiveUnitForPlan {
     if (_meta?.type == ScriptureTextType.quran) {
-      return QuranPageMapper.surahToPage(_currentChapter);
+      return QuranPageMapper.surahLastPage(_currentChapter);
     }
     return _currentChapter;
   }

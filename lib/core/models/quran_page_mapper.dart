@@ -50,4 +50,10 @@ class QuranPageMapper {
     final globalVerseStart = _cumulative[surah - 1] + 1;
     return (globalVerseStart - 1) ~/ versesPerPage + 1;
   }
+
+  /// Returns the 1-based page number on which [surah] (1-based) ends.
+  static int surahLastPage(int surah) {
+    final lastGlobalVerse = _cumulative[surah]; // total verses through this surah
+    return (lastGlobalVerse - 1) ~/ versesPerPage + 1;
+  }
 }
