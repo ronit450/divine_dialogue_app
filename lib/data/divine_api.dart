@@ -135,7 +135,7 @@ class DivineApi {
         return ApiStreamPassage(_citationFromPassage(j));
       case 'text_delta':
         final text = j['text'] as String? ?? '';
-        final phase = j['phase'] as String? ?? 'answer';
+        final phase = j['phase'] as String? ?? 'unknown';
         return text.isNotEmpty ? ApiStreamChunk(text, phase: phase) : null;
       case 'done':
         final raw = j['answer'] as String? ?? '';
