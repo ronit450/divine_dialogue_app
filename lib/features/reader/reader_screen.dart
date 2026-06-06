@@ -589,6 +589,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget _navBtn({required IconData icon, required Color color, VoidCallback? onTap}) =>
       GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: SizedBox(width: 48, height: 48, child: Icon(icon, size: 17, color: color)),
       );
 
