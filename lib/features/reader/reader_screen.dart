@@ -82,6 +82,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    final plan = ref.read(readingPlanProvider).planForText(widget.textId);
+    if (plan != null && !_loading) {
+      ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, _currentChapter);
+    }
     _scrollCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
@@ -193,6 +197,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
     await ref.read(scripturePositionProvider.notifier).savePosition(widget.textId, num, 1);
+    final plan = ref.read(readingPlanProvider).planForText(widget.textId);
+    if (plan != null) {
+      await ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, num);
+    }
     if (mounted) {
       setState(() => _loading = false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
