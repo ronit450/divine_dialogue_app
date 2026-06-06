@@ -81,6 +81,7 @@ class ReadingPlan {
     required this.completedDates,
     required this.streakFreezes,
     required this.catchUpMode,
+    this.lastReadUnit,
   });
 
   final String id;
@@ -99,6 +100,7 @@ class ReadingPlan {
   final Set<String> completedDates;
   final bool streakFreezes;
   final bool catchUpMode;
+  final int? lastReadUnit;
 
   static String _dateStr(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -175,6 +177,8 @@ class ReadingPlan {
     Set<String>? completedDates,
     bool? streakFreezes,
     bool? catchUpMode,
+    int? lastReadUnit,
+    bool clearLastRead = false,
   }) {
     return ReadingPlan(
       id: id,
@@ -194,6 +198,7 @@ class ReadingPlan {
       completedDates: completedDates ?? this.completedDates,
       streakFreezes: streakFreezes ?? this.streakFreezes,
       catchUpMode: catchUpMode ?? this.catchUpMode,
+      lastReadUnit: clearLastRead ? null : (lastReadUnit ?? this.lastReadUnit),
     );
   }
 
@@ -214,6 +219,7 @@ class ReadingPlan {
         'completedDates': completedDates.toList(),
         'streakFreezes': streakFreezes,
         'catchUpMode': catchUpMode,
+        'lastReadUnit': lastReadUnit,
       };
 
   factory ReadingPlan.fromJson(Map<String, dynamic> json) => ReadingPlan(
@@ -235,6 +241,7 @@ class ReadingPlan {
             (json['completedDates'] as List).cast<String>()),
         streakFreezes: (json['streakFreezes'] as bool?) ?? true,
         catchUpMode: (json['catchUpMode'] as bool?) ?? false,
+        lastReadUnit: json['lastReadUnit'] as int?,
       );
 
   factory ReadingPlan.create({
