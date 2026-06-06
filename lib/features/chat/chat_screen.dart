@@ -684,39 +684,20 @@ class _AgentBubble extends StatelessWidget {
             ],
           ),
 
-          // Passage cards — below the bubble, indented to align with the body
+          // References row — tapping opens bottom sheet with passage cards
           if (passages.isNotEmpty) ...[
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.only(left: 36),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'REFERENCED PASSAGES',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: muted,
-                      fontSize: 9,
-                      letterSpacing: 1.4,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...passages.map(
-                    (p) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _PassageCard(
-                        citation: p,
-                        accent: accent,
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                        line: line,
-                        textId: textId,
-                      ),
-                    ),
-                  ),
-                ],
+              child: _ReferencesRow(
+                count: passages.length,
+                passages: passages,
+                accent: accent,
+                isDark: isDark,
+                fg: fg,
+                muted: muted,
+                line: line,
+                textId: textId,
               ),
             ),
           ],
@@ -1007,6 +988,170 @@ class _PassageCard extends ConsumerWidget {
         ],
       ),
     ),
+    );
+  }
+}
+
+// ─── References row — tappable chip that opens passage bottom sheet ───────────
+
+class _ReferencesRow extends StatelessWidget {
+  const _ReferencesRow({
+    required this.count,
+    required this.passages,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    this.textId,
+  });
+
+  final int count;
+  final List<Citation> passages;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final String? textId;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _PassageBottomSheet(
+          passages: passages,
+          accent: accent,
+          isDark: isDark,
+          fg: fg,
+          muted: muted,
+          line: line,
+          textId: textId,
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accent.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.menu_book_outlined, size: 13, color: accent),
+            const SizedBox(width: 5),
+            Text(
+              '$count Reference${count == 1 ? '' : 's'}',
+              style: GoogleFonts.inter(
+                color: accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Icon(Icons.chevron_right_rounded, size: 14, color: accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Passage bottom sheet ─────────────────────────────────────────────────────
+
+class _PassageBottomSheet extends StatelessWidget {
+  const _PassageBottomSheet({
+    required this.passages,
+    required this.accent,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    this.textId,
+  });
+
+  final List<Citation> passages;
+  final Color accent;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final String? textId;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: muted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'REFERENCED PASSAGES',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: muted,
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${passages.length}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: accent,
+                      fontSize: 9,
+                      letterSpacing: 1.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: line),
+            Expanded(
+              child: ListView.separated(
+                controller: controller,
+                padding: const EdgeInsets.all(16),
+                itemCount: passages.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => _PassageCard(
+                  citation: passages[i],
+                  accent: accent,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                  line: line,
+                  textId: textId,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
