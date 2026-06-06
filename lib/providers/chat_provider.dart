@@ -240,7 +240,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       )) {
         if (event is ApiStreamStatus) {
           final msg = event.message;
-          final flipTool = msg.startsWith('Searching') && !state.hasToolCall;
+          final flipTool = msg.isNotEmpty && !state.hasToolCall;
           // Keep preamble visible for >=500 ms before the tool-call block
           // appears. No-op when the server already streams at natural pace.
           if (flipTool && preambleFirstAt != null) {
@@ -250,6 +250,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             }
           }
           state = state.copyWith(
+            isTyping: false,
             statusMessage: msg,
             hasToolCall: flipTool ? true : null,
           );
