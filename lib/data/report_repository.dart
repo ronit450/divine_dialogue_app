@@ -24,10 +24,13 @@ class ReportRepository {
   }) async {
     final id = _uuid.v4();
     final now = FieldValue.serverTimestamp();
+    final safeDescription = description.length > 4000
+        ? description.substring(0, 4000)
+        : description;
 
     final report = <String, dynamic>{
       'category': category,
-      'description': description,
+      'description': safeDescription,
       'anonymous': anonymous,
       'status': 'open',
       'createdAt': now,
@@ -50,7 +53,7 @@ class ReportRepository {
         'html': _buildEmailHtml(
           id: id,
           category: category,
-          description: description,
+          description: safeDescription,
           anonymous: anonymous,
           contactEmail: anonymous ? null : contactEmail,
           appVersion: includeDevInfo ? (appVersion ?? '1.0.0') : null,

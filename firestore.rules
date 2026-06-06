@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Users ──────────────────────────────────────────────────────────────
+    // Each authenticated user can read and write only their own document.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Conversations — owned by the user
+      match /conversations/{convId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Saved verses — owned by the user
+      match /savedVerses/{verseId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Reading plans — owned by the user
+      match /readingPlans/{planId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ── Reports ────────────────────────────────────────────────────────────
+    // Any authenticated user can create a report; nobody can read or modify them
+    // (admin access via Firebase Console / Cloud Functions only).
+    match /reports/{reportId} {
+      allow create: if request.auth != null
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 4000
+        && request.resource.data.category is string;
+      allow read, update, delete: if false;
+    }
+
+    // ── Mail ───────────────────────────────────────────────────────────────
+    // Written only by Cloud Functions (Trigger Email extension).
+    // No client access.
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
+    // ── Catch-all — deny everything not explicitly allowed ─────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

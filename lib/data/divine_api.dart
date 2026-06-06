@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import '../core/models/chat_message.dart';
 
@@ -39,11 +38,18 @@ class DivineApi {
   DivineApi._();
   static final DivineApi instance = DivineApi._();
 
+  // TODO(backend): switch to https once your backend buddy enables TLS on the ALB
+  static const _baseUrl = 'http://divince-chat-ai-alb-1631994646.us-east-1.elb.amazonaws.com';
+
   http.Client _client = http.Client();
-  String get _baseUrl => dotenv.env['BASE_URL'] ?? '';
 
   String? _cachedToken;
   DateTime? _tokenExpiry;
+
+  void clearCache() {
+    _cachedToken = null;
+    _tokenExpiry = null;
+  }
 
   Future<Map<String, String>> _headers() async {
     final now = DateTime.now();
@@ -81,7 +87,10 @@ class DivineApi {
 
     final http.StreamedResponse sseResponse;
     try {
-      sseResponse = await _client.send(request);
+      sseResponse = await _client.send(request).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw Exception('Request timed out. Please try again.'),
+      );
     } catch (e) {
       throw Exception('Network error: $e');
     }

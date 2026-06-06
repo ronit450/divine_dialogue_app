@@ -326,15 +326,12 @@ class _ProfileField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: line)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      margin: const EdgeInsets.only(bottom: 4),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 16),
           Text(
             label.toUpperCase(),
             style: GoogleFonts.jetBrainsMono(
@@ -360,9 +357,14 @@ class _ProfileField extends StatelessWidget {
                 fontSize: 17,
                 fontWeight: FontWeight.w400,
               ),
-              border: InputBorder.none,
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: line),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: accent, width: 1.5),
+              ),
               isDense: true,
-              contentPadding: EdgeInsets.zero,
+              contentPadding: const EdgeInsets.only(bottom: 8),
             ),
           ),
         ],

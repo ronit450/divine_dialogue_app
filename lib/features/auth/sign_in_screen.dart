@@ -18,6 +18,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _obscurePassword = true;
   bool _loading = false;
 
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(religionProvider);
@@ -74,20 +84,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 style: GoogleFonts.inter(color: muted, fontSize: 15, height: 1.5),
               ),
               const SizedBox(height: 36),
-              if (_isSignup) ...[
-                _UnderlineField(
-                  label: 'Name', placeholder: 'Your name',
-                  fg: fg, muted: muted, line: line, accent: accent,
-                ),
-              ],
               _UnderlineField(
-                label: 'Email', placeholder: 'you@example.com',
+                label: 'Email',
+                placeholder: 'you@example.com',
                 fg: fg, muted: muted, line: line, accent: accent,
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
               ),
               _UnderlineField(
-                label: 'Password', placeholder: '••••••••••',
+                label: 'Password',
+                placeholder: '••••••••••',
                 fg: fg, muted: muted, line: line, accent: accent,
+                controller: _passwordController,
                 obscure: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _loading ? null : _handleEmailAuth(),
                 trailing: GestureDetector(
                   onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                   child: Text(
@@ -100,9 +112,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(
-                    'Forgot password',
-                    style: GoogleFonts.inter(color: muted, fontSize: 13),
+                  child: GestureDetector(
+                    onTap: _loading ? null : _showForgotPasswordSheet,
+                    child: Text(
+                      'Forgot password?',
+                      style: GoogleFonts.inter(color: accent, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
                   ),
                 ),
               ],
@@ -190,36 +205,55 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  Future<void> _completeSignIn() async {
-    // Don't set signInDone here — profile_setup_screen does it after saving,
-    // preventing the router from redirecting away before we reach /profile-setup
-    if (mounted) context.go('/profile-setup');
-  }
-
   Future<void> _handleEmailAuth() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter your email and password.');
+      return;
+    }
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email)) {
+      _showError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      _showError('Password must be at least 6 characters.');
+      return;
+    }
+
     setState(() => _loading = true);
-    await _completeSignIn();
-    if (mounted) setState(() => _loading = false);
+    try {
+      if (_isSignup) {
+        await ref.read(authProvider.notifier).signUpWithEmail(email, password);
+        if (mounted) context.go('/verify-email');
+      } else {
+        await ref.read(authProvider.notifier).signInWithEmail(email, password);
+        if (mounted) context.go('/profile-setup');
+      }
+    } on Exception catch (e) {
+      if (mounted) _showError(_friendlyError(e.toString()));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _handleGoogle() async {
     setState(() => _loading = true);
     try {
       await ref.read(authProvider.notifier).signInWithGoogle();
-      await _completeSignIn();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
+      if (mounted) context.go('/profile-setup');
+    } on Exception catch (e) {
+      if (mounted) _showError(_friendlyError(e.toString()));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _handleApple() async {
+    // Apple sign-in not yet implemented
     setState(() => _loading = true);
-    await _completeSignIn();
+    if (mounted) context.go('/profile-setup');
     if (mounted) setState(() => _loading = false);
   }
 
@@ -228,6 +262,147 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(religionProvider.notifier).completeSignIn();
     if (mounted) context.go('/home');
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _showForgotPasswordSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final line = isDark ? AppColors.nightLine : AppColors.boneLine;
+    final surface = isDark ? AppColors.nightSurface : Colors.white;
+    final accent = ref.read(religionProvider).selectedReligion?.accentColor ?? AppColors.islamGreen;
+
+    final resetController = TextEditingController(text: _emailController.text);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        bool sending = false;
+        bool sent = false;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                28, 28, 28,
+                28 + MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Reset password',
+                    style: GoogleFonts.cormorantGaramond(
+                      color: fg, fontSize: 28, fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "We'll send a reset link to your email.",
+                    style: GoogleFonts.inter(color: muted, fontSize: 14),
+                  ),
+                  const SizedBox(height: 24),
+                  if (sent) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline_rounded, color: accent, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Reset link sent! Check your inbox.',
+                              style: GoogleFonts.inter(color: fg, fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: TextField(
+                        controller: resetController,
+                        keyboardType: TextInputType.emailAddress,
+                        autofocus: true,
+                        style: GoogleFonts.inter(color: fg, fontSize: 17, fontWeight: FontWeight.w500),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'your@email.com',
+                          hintStyle: GoogleFonts.inter(color: muted.withValues(alpha: 0.5), fontSize: 17),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: sending
+                            ? null
+                            : () async {
+                                final email = resetController.text.trim();
+                                if (email.isEmpty) return;
+                                setSheetState(() => sending = true);
+                                try {
+                                  await ref.read(authProvider.notifier).sendPasswordResetEmail(email);
+                                  setSheetState(() { sending = false; sent = true; });
+                                } on Exception catch (e) {
+                                  setSheetState(() => sending = false);
+                                  if (mounted) _showError(_friendlyError(e.toString()));
+                                }
+                              },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: sending
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : Text(
+                                'Send reset link',
+                                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                              ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() => resetController.dispose());
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  String _friendlyError(String raw) {
+    if (raw.contains('email-already-in-use')) return 'An account with this email already exists.';
+    if (raw.contains('wrong-password') || raw.contains('invalid-credential')) return 'Incorrect email or password.';
+    if (raw.contains('user-not-found')) return 'No account found with this email.';
+    if (raw.contains('too-many-requests')) return 'Too many attempts. Please try again later.';
+    if (raw.contains('network-request-failed')) return 'No internet connection.';
+    if (raw.contains('weak-password')) return 'Password is too weak. Use at least 6 characters.';
+    if (raw.contains('invalid-email')) return 'Invalid email address.';
+    return raw.replaceAll('Exception: ', '');
   }
 }
 
@@ -239,7 +414,11 @@ class _UnderlineField extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.accent,
+    required this.controller,
     this.obscure = false,
+    this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
     this.trailing,
   });
 
@@ -249,37 +428,50 @@ class _UnderlineField extends StatelessWidget {
   final Color muted;
   final Color line;
   final Color accent;
+  final TextEditingController controller;
   final bool obscure;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       margin: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(
-                    color: muted, fontSize: 10, letterSpacing: 1.5, fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  obscure ? '••••••••••' : placeholder,
-                  style: GoogleFonts.inter(color: fg, fontSize: 17, fontWeight: FontWeight.w500),
-                ),
-              ],
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.jetBrainsMono(
+              color: muted, fontSize: 10, letterSpacing: 1.5, fontWeight: FontWeight.w500,
             ),
           ),
-          trailing ?? const SizedBox.shrink(),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  keyboardType: keyboardType,
+                  textInputAction: textInputAction,
+                  onSubmitted: onSubmitted,
+                  style: GoogleFonts.inter(color: fg, fontSize: 17, fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: placeholder,
+                    hintStyle: GoogleFonts.inter(color: muted.withValues(alpha: 0.5), fontSize: 17),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
         ],
       ),
     );

@@ -20,7 +20,27 @@ class UserRepository {
     return UserModel.fromFirestore(doc);
   }
 
-  Future<void> updateUser(String uid, Map<String, dynamic> fields) async {
+  Future<void> updateLastActive(String uid) async {
+    await _usersCollection.doc(uid).update({
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateProfile(String uid, {
+    String? firstName,
+    String? lastName,
+    int? age,
+    String? photoUrl,
+    String? religionId,
+  }) async {
+    final fields = <String, dynamic>{
+      if (firstName != null) 'firstName': firstName,
+      if (lastName != null) 'lastName': lastName,
+      if (age != null) 'age': age,
+      if (photoUrl != null) 'photoUrl': photoUrl,
+      if (religionId != null) 'religionId': religionId,
+    };
+    if (fields.isEmpty) return;
     await _usersCollection.doc(uid).update(fields);
   }
 

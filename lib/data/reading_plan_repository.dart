@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/reading_plan.dart';
 
@@ -63,7 +64,9 @@ class ReadingPlanRepository {
     if (col == null) return;
     try {
       await col.doc(plan.id).set(plan.toJson());
-    } catch (_) {}
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'ReadingPlanRepository.upsertRemotePlan');
+    }
   }
 
   Future<void> deleteRemotePlan(String planId) async {
@@ -71,7 +74,9 @@ class ReadingPlanRepository {
     if (col == null) return;
     try {
       await col.doc(planId).delete();
-    } catch (_) {}
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'ReadingPlanRepository.deleteRemotePlan');
+    }
   }
 
   Future<bool> shouldShowPopup() async {

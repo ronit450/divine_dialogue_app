@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class AssemblyAiService {
@@ -9,7 +8,9 @@ class AssemblyAiService {
 
   static const _base = 'https://api.assemblyai.com/v2';
 
-  String get _key => dotenv.env['ASSEMBLY_AI_KEY'] ?? '';
+  // Key is injected at build time via --dart-define=ASSEMBLY_AI_KEY=xxx
+  // The key must NEVER be bundled in the app as an asset.
+  static const _key = String.fromEnvironment('ASSEMBLY_AI_KEY');
 
   Future<String> transcribe(String filePath, {String languageCode = 'ur'}) async {
     final uploadUrl = await _upload(filePath);

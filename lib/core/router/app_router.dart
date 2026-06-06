@@ -7,6 +7,7 @@ import '../../features/onboarding/onboarding_intro_screen.dart';
 import '../../features/onboarding/onboarding_religion_screen.dart';
 import '../../features/onboarding/onboarding_text_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
+import '../../features/auth/email_verification_screen.dart';
 import '../../features/profile_setup/profile_setup_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/home/home_screen.dart';
@@ -40,7 +41,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/splash') return null;
 
       if (!signInDone) {
-        const preAuthPaths = ['/onboarding', '/sign-in', '/profile-setup'];
+        const preAuthPaths = ['/onboarding', '/sign-in', '/verify-email', '/profile-setup'];
         final allowed = preAuthPaths.any((p) => loc.startsWith(p));
         if (!allowed) return '/onboarding';
         return null;
@@ -80,6 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sign-in',
         builder: (context, state) => const SignInScreen(),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => const EmailVerificationScreen(),
       ),
       GoRoute(
         path: '/profile-setup',

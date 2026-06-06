@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/saved_verse.dart';
 import '../data/saved_verses_repository.dart';
+import 'auth_provider.dart';
 
 class SavedVersesNotifier extends StateNotifier<List<SavedVerse>> {
-  SavedVersesNotifier() : super([]) {
+  SavedVersesNotifier(this._ref) : super([]) {
     _load();
   }
 
+  final Ref _ref;
   final _repo = SavedVersesRepository.instance;
   // Guards against _load() overwriting optimistic state from toggle().
   bool _localWritten = false;
@@ -21,6 +23,9 @@ class SavedVersesNotifier extends StateNotifier<List<SavedVerse>> {
   bool isSaved(String id) => state.any((v) => v.id == id);
 
   Future<void> toggle(SavedVerse verse) async {
+    // Guest users cannot persist saves — Firestore writes are blocked for them
+    if (_ref.read(authProvider).isGuest) return;
+
     _localWritten = true;
     if (isSaved(verse.id)) {
       state = state.where((v) => v.id != verse.id).toList();
@@ -34,5 +39,5 @@ class SavedVersesNotifier extends StateNotifier<List<SavedVerse>> {
 
 final savedVersesProvider =
     StateNotifierProvider<SavedVersesNotifier, List<SavedVerse>>(
-  (_) => SavedVersesNotifier(),
+  (ref) => SavedVersesNotifier(ref),
 );

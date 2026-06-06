@@ -59,12 +59,25 @@ class UserNotifier extends StateNotifier<UserState> {
     state = UserState(user: user, isLoading: false);
   }
 
-  Future<void> updateUser(Map<String, dynamic> fields) async {
+  Future<void> updateUser({
+    String? firstName,
+    String? lastName,
+    int? age,
+    String? photoUrl,
+    String? religionId,
+  }) async {
     final current = state.user;
     if (current == null) return;
 
     state = state.copyWith(isLoading: true);
-    await UserRepository.instance.updateUser(current.uid, fields);
+    await UserRepository.instance.updateProfile(
+      current.uid,
+      firstName: firstName,
+      lastName: lastName,
+      age: age,
+      photoUrl: photoUrl,
+      religionId: religionId,
+    );
 
     final updated = await UserRepository.instance.getUser(current.uid);
     state = UserState(user: updated, isLoading: false);

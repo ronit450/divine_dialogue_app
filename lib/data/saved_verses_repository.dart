@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../core/models/saved_verse.dart';
 
 class SavedVersesRepository {
@@ -31,7 +32,9 @@ class SavedVersesRepository {
     if (col == null) return;
     try {
       await col.doc(verse.id).set(verse.toJson());
-    } catch (_) {}
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'SavedVersesRepository.save');
+    }
   }
 
   Future<void> delete(String id) async {
@@ -39,6 +42,8 @@ class SavedVersesRepository {
     if (col == null) return;
     try {
       await col.doc(id).delete();
-    } catch (_) {}
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'SavedVersesRepository.delete');
+    }
   }
 }

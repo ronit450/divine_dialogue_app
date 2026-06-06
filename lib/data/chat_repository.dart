@@ -18,6 +18,7 @@ class ChatRepository {
     if (uid == null) return [];
     final snap = await _conv(uid)
         .orderBy('updatedAt', descending: true)
+        .limit(20)
         .get();
     return snap.docs.map((d) => ChatSession.fromJson(d.data())).toList();
   }
@@ -41,11 +42,16 @@ class ChatRepository {
   Future<void> clearAll() async {
     final uid = _uid;
     if (uid == null) return;
-    final snap = await _conv(uid).get();
-    final batch = _db.batch();
-    for (final doc in snap.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
+    // Paginated deletion — avoids loading all docs into memory at once
+    QuerySnapshot snap;
+    do {
+      snap = await _conv(uid).limit(20).get();
+      if (snap.docs.isEmpty) break;
+      final batch = _db.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } while (snap.docs.length == 20);
   }
 }

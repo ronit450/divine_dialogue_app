@@ -80,6 +80,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   final Ref _ref;
   static const _uuid = Uuid();
+  DateTime? _lastSent;
 
   void clearSession() {
     state = const ChatState();
@@ -155,6 +156,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> sendMessage(String rawText) async {
+    final now = DateTime.now();
+    if (_lastSent != null && now.difference(_lastSent!).inSeconds < 3) return;
+    _lastSent = now;
+
     final text = rawText.length > 2000 ? rawText.substring(0, 2000) : rawText;
     if (state.session == null) {
       final rState = _ref.read(religionProvider);
@@ -332,9 +337,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
         hasToolCall: false,
         statusMessage: '',
         streamingPassages: const [],
-        error: e.toString().replaceFirst('Exception: ', ''),
+        error: _friendlyError(e),
       );
     }
+  }
+
+  static String _friendlyError(Object e) {
+    final msg = e.toString().replaceFirst('Exception: ', '');
+    if (msg.contains('timed out')) return 'Request timed out. Please try again.';
+    if (msg.contains('Network error')) return 'No connection. Please check your internet and try again.';
+    if (msg.contains('HTTP 401') || msg.contains('HTTP 403')) return 'Session expired. Please restart the app.';
+    if (msg.startsWith('HTTP 5') || msg.contains('HTTP 5')) return 'Server error. Please try again in a moment.';
+    return 'Something went wrong. Please try again.';
   }
 
   static List<String> _booksForText(String textId) {
