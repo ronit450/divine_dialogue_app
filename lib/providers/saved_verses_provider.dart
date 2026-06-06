@@ -35,6 +35,11 @@ class SavedVersesNotifier extends StateNotifier<List<SavedVerse>> {
       unawaited(_repo.save(verse));
     }
   }
+
+  void clear() {
+    _localWritten = false;
+    state = const [];
+  }
 }
 
 final savedVersesProvider =

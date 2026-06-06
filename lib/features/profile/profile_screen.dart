@@ -19,6 +19,7 @@ class ProfileScreen extends ConsumerWidget {
     final religionState = ref.watch(religionProvider);
     final themeMode = ref.watch(themeModeProvider);
     final userState = ref.watch(userProvider);
+    final authState = ref.watch(authProvider);
     final religion = religionState.selectedReligion;
     final accent = religion != null ? ReligionColors.accent(religion.id) : AppColors.islamGreen;
 
@@ -96,6 +97,15 @@ class ProfileScreen extends ConsumerWidget {
                               color: fg, fontSize: 22, fontWeight: FontWeight.w500,
                             ),
                           ),
+                          if (authState.email != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              authState.email!,
+                              style: GoogleFonts.jetBrainsMono(
+                                color: muted, fontSize: 11, letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
                             religion?.name ?? 'No tradition selected',
