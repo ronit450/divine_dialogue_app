@@ -34,11 +34,11 @@ class UserRepository {
     String? religionId,
   }) async {
     final fields = <String, dynamic>{
-      if (firstName != null) 'firstName': firstName,
-      if (lastName != null) 'lastName': lastName,
-      if (age != null) 'age': age,
-      if (photoUrl != null) 'photoUrl': photoUrl,
-      if (religionId != null) 'religionId': religionId,
+      'firstName': ?firstName,
+      'lastName': ?lastName,
+      'age': ?age,
+      'photoUrl': ?photoUrl,
+      'religionId': ?religionId,
     };
     if (fields.isEmpty) return;
     await _usersCollection.doc(uid).update(fields);
