@@ -48,6 +48,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _searching = false;
   String _searchQuery = '';
   bool _reachedBottom = false;
+  Set<int> _bookmarkedPages = {};
   final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
 
@@ -83,9 +84,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    final bookmarkRaw = prefs.getStringList('page_bookmarks_${widget.textId}') ?? [];
     setState(() {
       _showTranslation = prefs.getBool('reader_show_translation') ?? true;
       _showTranslit = prefs.getBool('reader_show_translit') ?? true;
+      _bookmarkedPages = bookmarkRaw.map(int.parse).toSet();
     });
   }
 
@@ -297,6 +300,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
+  Future<void> _togglePageBookmark() async {
+    final page = _currentChapter;
+    setState(() {
+      if (_bookmarkedPages.contains(page)) {
+        _bookmarkedPages.remove(page);
+      } else {
+        _bookmarkedPages.add(page);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'page_bookmarks_${widget.textId}',
+      _bookmarkedPages.map((p) => '$p').toList(),
+    );
+  }
+
   Widget _optionRow(
     String label, bool value, Color accent, Color fg, Color line,
     ValueChanged<bool> onChanged,
@@ -433,6 +452,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       ),
                     ),
                     GestureDetector(
+                      onTap: _loading ? null : _togglePageBookmark,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Icon(
+                          _bookmarkedPages.contains(_currentChapter)
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                          size: 18,
+                          color: _bookmarkedPages.contains(_currentChapter) ? accent : muted,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
                       onTap: _openReadingOptions,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -494,6 +526,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                     showTranslation: _showTranslation,
                                     showTranslit: _showTranslit,
                                     onlyOriginal: _onlyOriginal,
+                                    textId: widget.textId,
+                                    currentChapter: _currentChapter,
                                     onLongPress: () => _showVerseOptions(_displayVerses[i]),
                                   ),
                                 ),
@@ -896,7 +930,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 }
 
-class _VerseCard extends StatelessWidget {
+class _VerseCard extends ConsumerWidget {
   const _VerseCard({
     required this.verse,
     required this.type,
@@ -906,6 +940,8 @@ class _VerseCard extends StatelessWidget {
     required this.showTranslation,
     required this.showTranslit,
     required this.onlyOriginal,
+    required this.textId,
+    required this.currentChapter,
     this.onLongPress,
   });
 
@@ -917,12 +953,14 @@ class _VerseCard extends StatelessWidget {
   final bool showTranslation;
   final bool showTranslit;
   final bool onlyOriginal;
+  final String textId;
+  final int currentChapter;
   final VoidCallback? onLongPress;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final card = switch (type) {
-      ScriptureTextType.quran    => _quranCard(),
+      ScriptureTextType.quran    => _quranCard(ref),
       ScriptureTextType.ggs      => _sikhCard(),
       ScriptureTextType.dasam    => _sikhCard(),
       ScriptureTextType.bgv      => _sikhCard(),
@@ -999,7 +1037,7 @@ class _VerseCard extends StatelessWidget {
     );
   }
 
-  Widget _quranCard() => Padding(
+  Widget _quranCard(WidgetRef ref) => Padding(
         padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 24.0 : 18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1027,19 +1065,32 @@ class _VerseCard extends StatelessWidget {
                 textDirection: TextDirection.rtl,
                 style: const TextStyle(fontSize: 20, height: 2.0, fontFamily: 'serif'),
               ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                width: 22, height: 22,
-                margin: const EdgeInsets.only(top: 4, bottom: 8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle, border: Border.all(color: accent, width: 1.5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Builder(builder: (_) {
+                  final chNum = int.tryParse(verse.wordMeanings ?? '') ?? currentChapter;
+                  final id = SavedVerse.makeId(textId, chNum, verse.number);
+                  final saved = ref.watch(savedVersesProvider).any((sv) => sv.id == id);
+                  return saved
+                      ? Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Icon(Icons.bookmark, size: 14, color: accent),
+                        )
+                      : const SizedBox.shrink();
+                }),
+                Container(
+                  width: 22, height: 22,
+                  margin: const EdgeInsets.only(top: 4, bottom: 8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, border: Border.all(color: accent, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text('${verse.number}',
+                      style: GoogleFonts.jetBrainsMono(fontSize: 8, color: accent)),
+                  ),
                 ),
-                child: Center(
-                  child: Text('${verse.number}',
-                    style: GoogleFonts.jetBrainsMono(fontSize: 8, color: accent)),
-                ),
-              ),
+              ],
             ),
             if (showTranslit && verse.transliteration != null)
               Padding(
