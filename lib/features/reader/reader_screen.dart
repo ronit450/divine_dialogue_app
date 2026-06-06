@@ -93,12 +93,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   bool get _onlyOriginal => !_showTranslation && !_showTranslit;
 
-  int get _effectiveUnitForPlan {
-    if (_meta?.type == ScriptureTextType.quran) {
-      return QuranPageMapper.surahLastPage(_currentChapter);
-    }
-    return _currentChapter;
-  }
+  int get _effectiveUnitForPlan => _currentChapter;
 
   List<ScriptureVerse> get _displayVerses {
     if (!_searching || _searchQuery.isEmpty) return _verses;
@@ -112,6 +107,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   bool get _isPagedType =>
+      _meta!.type == ScriptureTextType.quran ||
       _meta!.type == ScriptureTextType.ggs ||
       _meta!.type == ScriptureTextType.dasam ||
       _meta!.type == ScriptureTextType.bgv ||
@@ -131,6 +127,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     final saved = ref.read(scripturePositionProvider).getPosition(widget.textId);
     _currentChapter = widget.initialChapter ?? saved.$1;
+    // Quran is paged but uses surah-list TOC — pre-load chapters for it
+    if (_meta!.type == ScriptureTextType.quran) {
+      _chapters = await _repo.loadChapters(widget.textId);
+    }
     try {
       if (_isPagedType) {
         _verses = await _loadPagedVerses(_currentChapter);
@@ -155,6 +155,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Future<List<ScriptureVerse>> _loadPagedVerses(int page) {
     return switch (_meta!.type) {
+      ScriptureTextType.quran    => _repo.loadQuranPage(page),
       ScriptureTextType.ggs      => _repo.loadGgsAng(page),
       ScriptureTextType.dasam    => _repo.loadDasamPage(page),
       ScriptureTextType.bgv      => _repo.loadBgvVaar(page),
@@ -213,6 +214,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = ReligionColors.accent(_meta!.religionId);
     int? result;
+
+    if (_meta!.type == ScriptureTextType.quran) {
+      result = await showTocSheet(
+        context: context, meta: _meta!, chapters: _chapters,
+        currentChapter: QuranPageMapper.pageToSurah(_currentChapter),
+        accent: accent, isDark: isDark,
+      );
+      if (result != null) await _goTo(QuranPageMapper.surahToPage(result));
+      return;
+    }
+
     if (_isPagedType) {
       result = await showPagedTocSheet(
         context: context, meta: _meta!, currentPage: _currentChapter,
@@ -618,7 +630,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       );
 
   String _verseReference(ScriptureVerse verse) => switch (_meta!.type) {
-    ScriptureTextType.quran    => 'Quran $_currentChapter:${verse.number}',
+    ScriptureTextType.quran    => 'Quran ${verse.wordMeanings ?? _currentChapter}:${verse.number}',
     ScriptureTextType.bible    => '${_meta!.title} $_currentChapter:${verse.number}',
     ScriptureTextType.gita     => 'Bhagavad Gita $_currentChapter.${verse.number}',
     ScriptureTextType.ggs      => 'Guru Granth Sahib Ang $_currentChapter',
@@ -982,6 +994,22 @@ class _VerseCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (verse.isGroupStart && (verse.groupLabel?.isNotEmpty ?? false)) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12, top: 4),
+                child: Text(
+                  verse.groupLabel!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cormorantGaramond(
+                    fontSize: 15,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: accent,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
             if (verse.original != null)
               Text(
                 verse.original!,
