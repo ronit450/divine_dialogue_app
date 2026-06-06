@@ -1137,7 +1137,7 @@ class _TodayBanner extends StatelessWidget {
                       color: accent, fontSize: 8, letterSpacing: 1.5),
                 ),
                 Text(
-                  '${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                  '${plan.unitLabel.toUpperCase()} ${plan.todayStartUnit}–${plan.todayEndUnit}',
                   style: GoogleFonts.inter(
                       color: fg, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
@@ -1200,7 +1200,7 @@ class _EndCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Day ${plan.dayNumber} · ${plan.unitLabel}s ${plan.todayStartUnit}–${plan.todayEndUnit}',
+            'Day ${plan.dayNumber} · ${plan.unitLabel} ${plan.todayStartUnit}–${plan.todayEndUnit}',
             style: GoogleFonts.jetBrainsMono(color: muted, fontSize: 9, letterSpacing: 0.8),
           ),
           const SizedBox(height: 16),

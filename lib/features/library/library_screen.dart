@@ -578,7 +578,7 @@ class _PlanHeroCard extends StatelessWidget {
                     Text(
                       plan.todayDone
                           ? 'DAY ${plan.dayNumber} DONE ✓'
-                          : 'TODAY · ${plan.unitLabel.toUpperCase()}S ${plan.todayStartUnit}–${plan.todayEndUnit}',
+                          : 'TODAY · ${plan.unitLabel.toUpperCase()} ${plan.todayStartUnit}–${plan.todayEndUnit}',
                       style: GoogleFonts.jetBrainsMono(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 9, letterSpacing: 1.2,
