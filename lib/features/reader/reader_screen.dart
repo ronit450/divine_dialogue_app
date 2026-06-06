@@ -23,10 +23,12 @@ class ReaderScreen extends ConsumerStatefulWidget {
     super.key,
     required this.textId,
     this.initialChapter,
+    this.hidePlanBanner = false,
   });
 
   final String textId;
   final int? initialChapter;
+  final bool hidePlanBanner;
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -49,6 +51,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   String _searchQuery = '';
   bool _reachedBottom = false;
   Set<int> _bookmarkedPages = {};
+  String? _verseBookmark;
   final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
 
@@ -89,6 +92,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       _showTranslation = prefs.getBool('reader_show_translation') ?? true;
       _showTranslit = prefs.getBool('reader_show_translit') ?? true;
       _bookmarkedPages = bookmarkRaw.map(int.parse).toSet();
+      _verseBookmark = prefs.getString('verse_bookmark_${widget.textId}');
     });
   }
 
@@ -316,6 +320,28 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
+  Future<void> _toggleVerseBookmark(ScriptureVerse verse) async {
+    final key = '$_currentChapter:${verse.number}';
+    final removing = _verseBookmark == key;
+    setState(() => _verseBookmark = removing ? null : key);
+    final prefs = await SharedPreferences.getInstance();
+    if (removing) {
+      await prefs.remove('verse_bookmark_${widget.textId}');
+    } else {
+      await prefs.setString('verse_bookmark_${widget.textId}', key);
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          removing ? 'Verse bookmark removed' : 'Verse bookmarked',
+          style: GoogleFonts.inter(fontSize: 13),
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   Widget _optionRow(
     String label, bool value, Color accent, Color fg, Color line,
     ValueChanged<bool> onChanged,
@@ -499,7 +525,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
             Divider(height: 1, color: line),
-            if (plan != null && !_loading)
+            if (plan != null && !_loading && !widget.hidePlanBanner)
               _TodayBanner(plan: plan, accent: accent, fg: fg, muted: muted),
             Expanded(
               child: _loading
@@ -528,6 +554,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                     onlyOriginal: _onlyOriginal,
                                     textId: widget.textId,
                                     currentChapter: _currentChapter,
+                                    isVerseBookmarked: _verseBookmark == '$_currentChapter:${_displayVerses[i].number}',
                                     onLongPress: () => _showVerseOptions(_displayVerses[i]),
                                   ),
                                 ),
@@ -840,6 +867,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
               Divider(height: 1, color: muted.withValues(alpha: 0.15)),
               _DialogOption(
+                icon: _verseBookmark == '$_currentChapter:${verse.number}'
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_add_outlined,
+                label: _verseBookmark == '$_currentChapter:${verse.number}'
+                    ? 'Remove verse bookmark'
+                    : 'Bookmark this verse',
+                color: _verseBookmark == '$_currentChapter:${verse.number}' ? accent : fg,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _toggleVerseBookmark(verse);
+                },
+              ),
+              Divider(height: 1, color: muted.withValues(alpha: 0.15)),
+              _DialogOption(
                 icon: Icons.ios_share_rounded,
                 label: 'Share verse',
                 color: fg,
@@ -942,6 +983,7 @@ class _VerseCard extends ConsumerWidget {
     required this.onlyOriginal,
     required this.textId,
     required this.currentChapter,
+    this.isVerseBookmarked = false,
     this.onLongPress,
   });
 
@@ -955,6 +997,7 @@ class _VerseCard extends ConsumerWidget {
   final bool onlyOriginal;
   final String textId;
   final int currentChapter;
+  final bool isVerseBookmarked;
   final VoidCallback? onLongPress;
 
   @override
@@ -973,7 +1016,15 @@ class _VerseCard extends ConsumerWidget {
     return GestureDetector(
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
-      child: card,
+      child: isVerseBookmarked
+          ? Container(
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: accent, width: 3)),
+              ),
+              padding: const EdgeInsets.only(left: 10),
+              child: card,
+            )
+          : card,
     );
   }
 

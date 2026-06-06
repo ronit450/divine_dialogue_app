@@ -375,7 +375,7 @@ void _showReadOrPlanSheet(
           GestureDetector(
             onTap: () {
               Navigator.of(ctx).pop();
-              context.push('/read/$textId', extra: {'chapter': plan.todayStartUnit});
+              context.push('/read/$textId', extra: {'chapter': plan.lastReadUnit ?? plan.todayStartUnit});
             },
             child: Container(
               width: double.infinity, height: 56,
@@ -408,7 +408,7 @@ void _showReadOrPlanSheet(
           GestureDetector(
             onTap: () {
               Navigator.of(ctx).pop();
-              context.push('/read/$textId');
+              context.push('/read/$textId', extra: {'browse': true});
             },
             child: Container(
               width: double.infinity, height: 50,

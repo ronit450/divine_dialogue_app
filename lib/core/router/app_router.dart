@@ -125,12 +125,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/read/:textId',
         parentNavigatorKey: _rootKey,
-        builder: (context, state) => ReaderScreen(
-          textId: state.pathParameters['textId']!,
-          initialChapter: state.extra is Map
-              ? (state.extra as Map)['chapter'] as int?
-              : null,
-        ),
+        builder: (context, state) {
+          final extra = state.extra is Map ? state.extra as Map : null;
+          return ReaderScreen(
+            textId: state.pathParameters['textId']!,
+            initialChapter: extra?['chapter'] as int?,
+            hidePlanBanner: (extra?['browse'] as bool?) ?? false,
+          );
+        },
       ),
       StatefulShellRoute.indexedStack(
         parentNavigatorKey: _rootKey,
