@@ -675,6 +675,34 @@ class _AgentBubble extends StatelessWidget {
                           showCursor: isStreaming,
                         ),
 
+                      // Subtle indicator while answer is actively streaming
+                      if (isStreaming && hasAnswer) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    muted.withValues(alpha: 0.5)),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Generating…',
+                              style: GoogleFonts.inter(
+                                color: muted.withValues(alpha: 0.5),
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
                       // Initial loading state — visible before any preamble arrives
                       if (showLoadingDots) _ThinkingIndicator(accent: accent, muted: muted),
                     ],
@@ -760,7 +788,7 @@ class _AnswerBody extends StatelessWidget {
 
 // ─── Tool-call block ─────────────────────────────────────────────────────────
 
-class _ToolCallBlock extends StatelessWidget {
+class _ToolCallBlock extends StatefulWidget {
   const _ToolCallBlock({
     required this.isRunning,
     required this.passageCount,
@@ -780,35 +808,69 @@ class _ToolCallBlock extends StatelessWidget {
   final Color line;
 
   @override
+  State<_ToolCallBlock> createState() => _ToolCallBlockState();
+}
+
+class _ToolCallBlockState extends State<_ToolCallBlock>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulse;
+  late Animation<double> _alpha;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _alpha = Tween<double>(begin: 0.04, end: 0.14)
+        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final doneColor = const Color(0xFF2E9D5C);
-    final blockBg = (isDark ? AppColors.nightBg : AppColors.boneBg)
-        .withValues(alpha: isDark ? 0.6 : 1.0);
-    final borderColor = isRunning ? line : doneColor.withValues(alpha: 0.6);
-    final fgColor = isRunning ? muted : doneColor;
+    final blockBg = (widget.isDark ? AppColors.nightBg : AppColors.boneBg)
+        .withValues(alpha: widget.isDark ? 0.6 : 1.0);
+    final borderColor = widget.isRunning
+        ? widget.accent.withValues(alpha: 0.35)
+        : doneColor.withValues(alpha: 0.6);
+    final fgColor = widget.isRunning ? widget.muted : doneColor;
 
-    final label = isRunning
-        ? (statusMessage.isNotEmpty ? statusMessage : 'Searching…')
-        : 'Found $passageCount passage${passageCount == 1 ? '' : 's'}';
+    final label = widget.isRunning
+        ? (widget.statusMessage.isNotEmpty ? widget.statusMessage : 'Searching…')
+        : 'Found ${widget.passageCount} passage${widget.passageCount == 1 ? '' : 's'}';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: blockBg,
-        border: Border.all(color: borderColor, width: 0.8),
-        borderRadius: BorderRadius.circular(8),
+    return AnimatedBuilder(
+      animation: _alpha,
+      builder: (_, child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: widget.isRunning
+              ? widget.accent.withValues(alpha: _alpha.value)
+              : blockBg,
+          border: Border.all(color: borderColor, width: 0.8),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: child,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isRunning)
+          if (widget.isRunning)
             SizedBox(
               width: 12,
               height: 12,
               child: CircularProgressIndicator(
                 strokeWidth: 1.5,
-                valueColor: AlwaysStoppedAnimation<Color>(muted),
+                valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
               ),
             )
           else
