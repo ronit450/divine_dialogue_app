@@ -47,6 +47,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _waitingForDownload = false;
   bool _searching = false;
   String _searchQuery = '';
+  bool _reachedBottom = false;
   final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
 
@@ -69,6 +70,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         });
       }
     }
+    _scrollCtrl.addListener(() {
+      if (!_reachedBottom &&
+          _scrollCtrl.hasClients &&
+          _scrollCtrl.position.pixels >=
+              _scrollCtrl.position.maxScrollExtent - 80) {
+        setState(() => _reachedBottom = true);
+      }
+    });
   }
 
   Future<void> _loadPrefs() async {
@@ -184,7 +193,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _goTo(int num) async {
     final max = _meta!.totalChapters;
     if (num < 1 || num > max) return;
-    setState(() { _loading = true; _dismissedEndCard = false; });
+    setState(() { _loading = true; _dismissedEndCard = false; _reachedBottom = false; });
     _currentChapter = num;
     try {
       if (_isPagedType) {
@@ -346,6 +355,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final showEndCard = plan != null &&
         !plan.todayDone &&
         !_dismissedEndCard &&
+        _reachedBottom &&
         _effectiveUnitForPlan >= plan.todayEndUnit;
 
     if (_error != null) {

@@ -8,7 +8,6 @@ import '../../providers/download_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../core/models/reading_plan.dart';
-import '../../core/models/quran_page_mapper.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -337,10 +336,6 @@ void _showReadOrPlanSheet(
   Color line,
   Color surface,
 ) {
-  final int readerChapter = textId == 'quran'
-      ? QuranPageMapper.pageToSurah(plan.todayStartUnit)
-      : plan.todayStartUnit;
-
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: bg,
@@ -380,7 +375,7 @@ void _showReadOrPlanSheet(
           GestureDetector(
             onTap: () {
               Navigator.of(ctx).pop();
-              context.push('/read/$textId', extra: {'chapter': readerChapter});
+              context.push('/read/$textId', extra: {'chapter': plan.todayStartUnit});
             },
             child: Container(
               width: double.infinity, height: 56,
