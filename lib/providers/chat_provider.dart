@@ -265,7 +265,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
             streamingPassages: [...state.streamingPassages, event.citation],
           );
         } else if (event is ApiStreamChunk) {
-          if (event.phase == 'preamble') {
+          // Treat chunk as preamble when:
+          //   (a) explicitly marked preamble, OR
+          //   (b) phase is unknown/missing AND answer hasn't started yet
+          final isPreamble = event.phase == 'preamble' ||
+              (event.phase != 'answer' && !answerStarted);
+
+          if (isPreamble) {
             preambleFirstAt ??= DateTime.now();
             preambleBuffer.write(event.text);
             state = state.copyWith(
