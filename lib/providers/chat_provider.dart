@@ -213,9 +213,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
     unawaited(ChatRepository.instance.saveSession(withUser));
     _ref.read(historyProvider.notifier).load();
 
+    // Track when we sent so we can enforce minimum visible durations for each
+    // phase (Thinking → Searching → Answer) regardless of backend speed.
+    final sentAt = DateTime.now();
+
     // Yield to event loop so Flutter renders the ThinkingIndicator bubble
-    // before the SSE loop begins. Without this, fast backends respond before
-    // a frame is scheduled and the thinking state never appears.
+    // before the SSE loop begins.
     await Future.delayed(const Duration(milliseconds: 300));
 
     try {
@@ -246,12 +249,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
         if (event is ApiStreamStatus) {
           final msg = event.message;
           final flipTool = msg.isNotEmpty && !state.hasToolCall;
-          // Keep preamble visible for >=500 ms before the tool-call block
-          // appears. No-op when the server already streams at natural pace.
-          if (flipTool && preambleFirstAt != null) {
-            final elapsed = DateTime.now().difference(preambleFirstAt).inMilliseconds;
-            if (elapsed < 500) {
-              await Future<void>.delayed(Duration(milliseconds: 500 - elapsed));
+          // Ensure ThinkingIndicator visible for ≥1200 ms before the
+          // tool-call pill appears — regardless of whether preamble arrived.
+          if (flipTool) {
+            final sinceStart = DateTime.now().difference(sentAt).inMilliseconds;
+            if (sinceStart < 1200) {
+              await Future<void>.delayed(Duration(milliseconds: 1200 - sinceStart));
             }
           }
           state = state.copyWith(
@@ -279,14 +282,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
               streamingPreamble: preambleBuffer.toString(),
             );
           } else {
-            // Keep the tool-call spinner visible for >=500 ms before answer
-            // text begins streaming in.
             if (!answerStarted) {
               answerStarted = true;
-              if (state.hasToolCall && toolCallAt != null) {
-                final elapsed = DateTime.now().difference(toolCallAt).inMilliseconds;
-                if (elapsed < 500) {
-                  await Future<void>.delayed(Duration(milliseconds: 500 - elapsed));
+              // Ensure ThinkingIndicator visible for ≥1200 ms from send.
+              final sinceStart = DateTime.now().difference(sentAt).inMilliseconds;
+              if (sinceStart < 1200) {
+                await Future<void>.delayed(Duration(milliseconds: 1200 - sinceStart));
+              }
+              // If backend sent no status event, synthesise a searching state
+              // so the user sees the pill before the answer begins.
+              if (!state.hasToolCall) {
+                state = state.copyWith(hasToolCall: true, statusMessage: '');
+                toolCallAt = DateTime.now();
+              }
+              // Ensure searching pill visible for ≥600 ms.
+              if (toolCallAt != null) {
+                final sinceSearch = DateTime.now().difference(toolCallAt).inMilliseconds;
+                if (sinceSearch < 600) {
+                  await Future<void>.delayed(Duration(milliseconds: 600 - sinceSearch));
                 }
               }
             }

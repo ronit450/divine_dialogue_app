@@ -581,7 +581,9 @@ class _AgentBubble extends StatelessWidget {
     final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
 
     final hasPreamble = message.preamble.isNotEmpty;
-    final hasAnswer = message.text.isNotEmpty;
+    // Treat leading-whitespace-only text as no answer yet so the ToolCallBlock
+    // spinner stays visible until real content arrives (first chunk is often "\n").
+    final hasAnswer = message.text.trimLeft().isNotEmpty;
     final hasToolCall = message.hasToolCall;
     final passages = message.citations;
 
