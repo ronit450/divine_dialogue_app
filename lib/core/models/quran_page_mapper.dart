@@ -1,3 +1,5 @@
+import 'scripture.dart';
+
 class QuranPageMapper {
   QuranPageMapper._();
 
@@ -55,5 +57,48 @@ class QuranPageMapper {
   static int surahLastPage(int surah) {
     final lastGlobalVerse = _cumulative[surah]; // total verses through this surah
     return (lastGlobalVerse - 1) ~/ versesPerPage + 1;
+  }
+
+  /// Returns the 0-based surah index that contains 0-based global verse [g].
+  static int _surahIndexForGlobal(int g) {
+    int lo = 0, hi = _verseCounts.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (_cumulative[mid + 1] <= g) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  /// Slices [allSurahs] into up to [versesPerPage] verses for [page] (1-based).
+  /// Sets [ScriptureVerse.isGroupStart] and [ScriptureVerse.groupLabel] at surah
+  /// boundaries, and stores the surah number as a string in [ScriptureVerse.wordMeanings].
+  static List<ScriptureVerse> buildPageVerses(
+      int page, List<ScriptureChapter> allSurahs) {
+    final globalStart = (page - 1) * versesPerPage;
+    final globalEnd = (page * versesPerPage - 1).clamp(0, _cumulative.last - 1);
+    final result = <ScriptureVerse>[];
+    int lastSurahNum = -1;
+
+    for (int g = globalStart; g <= globalEnd; g++) {
+      final surahIdx = _surahIndexForGlobal(g);
+      final surahNum = surahIdx + 1;
+      final verseIdx = g - _cumulative[surahIdx];
+      final surah = allSurahs[surahIdx];
+      final v = surah.verses[verseIdx];
+      final isNewSurah = surahNum != lastSurahNum;
+
+      result.add(ScriptureVerse(
+        number: v.number,
+        original: v.original,
+        translation: v.translation,
+        transliteration: v.transliteration,
+        wordMeanings: '$surahNum',
+        isGroupStart: isNewSurah,
+        groupLabel: isNewSurah ? surah.name : null,
+      ));
+      lastSurahNum = surahNum;
+    }
+    return result;
   }
 }
