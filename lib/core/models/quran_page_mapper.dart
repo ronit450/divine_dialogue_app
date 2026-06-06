@@ -64,8 +64,11 @@ class QuranPageMapper {
     int lo = 0, hi = _verseCounts.length - 1;
     while (lo < hi) {
       final mid = (lo + hi) ~/ 2;
-      if (_cumulative[mid + 1] <= g) lo = mid + 1;
-      else hi = mid;
+      if (_cumulative[mid + 1] <= g) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
     }
     return lo;
   }
