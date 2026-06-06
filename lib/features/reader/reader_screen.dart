@@ -46,6 +46,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _waitingForDownload = false;
   bool _searching = false;
   String _searchQuery = '';
+  final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
 
   @override
@@ -80,6 +81,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -183,7 +185,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
     await ref.read(scripturePositionProvider.notifier).savePosition(widget.textId, num, 1);
-    if (mounted) setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(0);
+      });
+    }
   }
 
   Future<void> _openToc() async {
@@ -434,6 +441,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           : (_onlyOriginal && _isSikhType)
                               ? _buildGurbaniParagraphView(accent, fg)
                               : ListView.separated(
+                                  controller: _scrollCtrl,
                                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 80),
                                   itemCount: _displayVerses.length,
                                   separatorBuilder: (_, _) => _onlyOriginal
