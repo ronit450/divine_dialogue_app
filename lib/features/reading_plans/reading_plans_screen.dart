@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/reading_plan.dart';
+import '../../core/models/quran_page_mapper.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/reading_plan_provider.dart';
 import '../../providers/religion_provider.dart';
@@ -205,6 +206,14 @@ class _PlanCard extends StatelessWidget {
     return words.take(2).map((w) => w[0].toUpperCase()).join();
   }
 
+  String _lastReadLabel(ReadingPlan plan) {
+    final unit = plan.lastReadUnit!;
+    final displayUnit = plan.textId == 'quran'
+        ? QuranPageMapper.surahToPage(unit)
+        : unit;
+    return 'LAST READ: ${plan.unitLabel.toUpperCase()} $displayUnit';
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = ReligionColors.accent(plan.religionId);
@@ -319,6 +328,14 @@ class _PlanCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (plan.lastReadUnit != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _lastReadLabel(plan),
+                      style: GoogleFonts.jetBrainsMono(
+                          color: muted, fontSize: 8, letterSpacing: 0.5),
+                    ),
+                  ],
                 ],
               ),
             ),
