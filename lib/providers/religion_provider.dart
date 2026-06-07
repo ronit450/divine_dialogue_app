@@ -12,6 +12,7 @@ class ReligionState {
     this.isLoaded = false,
     this.signInDone = false,
     this.onboardingDone = false,
+    this.introSeen = false,
   });
 
   final List<ReligionModel> religions;
@@ -21,6 +22,7 @@ class ReligionState {
   final bool isLoaded;
   final bool signInDone;
   final bool onboardingDone;
+  final bool introSeen;
 
   ReligionState copyWith({
     List<ReligionModel>? religions,
@@ -30,6 +32,7 @@ class ReligionState {
     bool? isLoaded,
     bool? signInDone,
     bool? onboardingDone,
+    bool? introSeen,
   }) => ReligionState(
     religions: religions ?? this.religions,
     selectedReligion: selectedReligion ?? this.selectedReligion,
@@ -38,6 +41,7 @@ class ReligionState {
     isLoaded: isLoaded ?? this.isLoaded,
     signInDone: signInDone ?? this.signInDone,
     onboardingDone: onboardingDone ?? this.onboardingDone,
+    introSeen: introSeen ?? this.introSeen,
   );
 }
 
@@ -58,6 +62,7 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
     final savedTextIdsStr = prefs.getString('selected_texts');
     final onboardingDone = prefs.getBool('onboarding_done') ?? false;
     final signInDone = prefs.getBool('sign_in_done') ?? false;
+    final introSeen = prefs.getBool('intro_seen') ?? false;
 
     ReligionModel? selectedReligion;
     SacredTextModel? selectedText;
@@ -107,6 +112,7 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
       isLoaded: true,
       signInDone: signInDone,
       onboardingDone: onboardingDone,
+      introSeen: introSeen,
     );
   }
 
@@ -126,6 +132,7 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
       isLoaded: state.isLoaded,
       signInDone: state.signInDone,
       onboardingDone: state.onboardingDone,
+      introSeen: state.introSeen,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_religion', religion.id);
@@ -189,5 +196,19 @@ class ReligionNotifier extends StateNotifier<ReligionState> {
       await prefs.setString('selected_text', primary.id);
     }
     await prefs.setBool('onboarding_done', true);
+  }
+
+  Future<void> completeIntro() async {
+    state = state.copyWith(introSeen: true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_seen', true);
+  }
+
+  void setReligionAndTexts(ReligionModel religion, List<SacredTextModel> texts) {
+    state = state.copyWith(
+      selectedReligion: religion,
+      selectedTexts: texts,
+      selectedText: texts.firstOrNull,
+    );
   }
 }

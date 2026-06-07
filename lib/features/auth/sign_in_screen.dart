@@ -22,6 +22,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _passwordController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(religionProvider.notifier).completeIntro();
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -31,6 +39,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(religionProvider);
+    final introSeen = state.introSeen;
     final accent = state.selectedReligion?.accentColor ?? AppColors.islamGreen;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
@@ -49,17 +58,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
-                    onTap: () => context.go('/onboarding/text'),
-                    child: Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: line),
+                  if (!introSeen)
+                    GestureDetector(
+                      onTap: () => context.go('/onboarding/text'),
+                      child: Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: line),
+                        ),
+                        child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
                       ),
-                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: fg),
-                    ),
-                  ),
+                    )
+                  else
+                    const SizedBox(width: 36),
                   Text(
                     _isSignup ? 'NEW · ACCOUNT' : 'WELCOME · BACK',
                     style: GoogleFonts.jetBrainsMono(
@@ -229,7 +241,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         if (mounted) context.go('/verify-email');
       } else {
         await ref.read(authProvider.notifier).signInWithEmail(email, password);
-        if (mounted) context.go('/profile-setup');
       }
     } on Exception catch (e) {
       if (mounted) _showError(_friendlyError(e.toString()));
@@ -242,7 +253,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     setState(() => _loading = true);
     try {
       await ref.read(authProvider.notifier).signInWithGoogle();
-      if (mounted) context.go('/profile-setup');
     } on Exception catch (e) {
       if (mounted) _showError(_friendlyError(e.toString()));
     } finally {

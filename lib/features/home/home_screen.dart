@@ -244,8 +244,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!mounted) return;
     final religion = ref.read(religionProvider).selectedReligion;
     if (religion == null) return;
-    final plans = ref.read(readingPlanProvider).plans;
-    if (plans.any((p) => p.religionId == religion.id)) return;
+    // Wait for plans to finish loading from Firestore before checking,
+    // otherwise we'd see an empty list and show the popup even if a plan exists.
+    var planState = ref.read(readingPlanProvider);
+    if (planState.isLoading) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      planState = ref.read(readingPlanProvider);
+      if (planState.isLoading) return; // still loading, skip this round
+    }
+    if (planState.plans.any((p) => p.religionId == religion.id)) return;
     final repo = ReadingPlanRepository.instance;
     final should = await repo.shouldShowPopup();
     if (!should || !mounted) return;

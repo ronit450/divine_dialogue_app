@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -131,6 +132,27 @@ class ProfileScreen extends ConsumerWidget {
                             line: line,
                             onTap: () => context.go('/profile-setup'),
                           ),
+                          if (FirebaseAuth.instance.currentUser?.providerData
+                              .any((p) => p.providerId == 'password') ?? false) ...[
+                            Divider(height: 1, color: line),
+                            _ActionRow(
+                              icon: Icons.lock_outline_rounded,
+                              label: 'Change password',
+                              fg: fg,
+                              muted: muted,
+                              line: line,
+                              onTap: () => _showChangePasswordSheet(
+                                context: context,
+                                ref: ref,
+                                accent: accent,
+                                fg: fg,
+                                muted: muted,
+                                line: line,
+                                surface: surface,
+                                isDark: isDark,
+                              ),
+                            ),
+                          ],
                           Divider(height: 1, color: line),
                           _ActionRow(
                             icon: Icons.logout_rounded,
@@ -705,6 +727,35 @@ class _TextPickerSheet extends ConsumerWidget {
   }
 }
 
+void _showChangePasswordSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required Color accent,
+  required Color fg,
+  required Color muted,
+  required Color line,
+  required Color surface,
+  required bool isDark,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => _ChangePasswordSheet(
+      ref: ref,
+      accent: accent,
+      fg: fg,
+      muted: muted,
+      line: line,
+      surface: surface,
+      isDark: isDark,
+    ),
+  );
+}
+
 void _showFontSizePicker({
   required BuildContext context,
   required Color accent,
@@ -863,6 +914,307 @@ class _FontScaleTrack extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ChangePasswordSheet extends StatefulWidget {
+  const _ChangePasswordSheet({
+    required this.ref,
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.surface,
+    required this.isDark,
+  });
+
+  final WidgetRef ref;
+  final Color accent, fg, muted, line, surface;
+  final bool isDark;
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _loading = false;
+  String? _error;
+  bool _success = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final current = _currentCtrl.text;
+    final newPw = _newCtrl.text;
+    final confirm = _confirmCtrl.text;
+
+    if (current.isEmpty || newPw.isEmpty || confirm.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (newPw.length < 6) {
+      setState(() => _error = 'New password must be at least 6 characters.');
+      return;
+    }
+    if (newPw != confirm) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+
+    setState(() { _loading = true; _error = null; });
+    try {
+      await widget.ref.read(authProvider.notifier).changePassword(current, newPw);
+      if (mounted) setState(() { _loading = false; _success = true; });
+    } on Exception catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = _friendlyError(e.toString());
+        });
+      }
+    }
+  }
+
+  String _friendlyError(String raw) {
+    if (raw.contains('wrong-password') || raw.contains('invalid-credential')) {
+      return 'Current password is incorrect.';
+    }
+    if (raw.contains('weak-password')) return 'New password is too weak.';
+    if (raw.contains('requires-recent-login')) {
+      return 'Please sign out and sign in again before changing your password.';
+    }
+    if (raw.contains('network-request-failed')) return 'No internet connection.';
+    return raw.replaceAll('Exception: ', '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        24, 0, 24,
+        24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: widget.muted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Change password',
+            style: GoogleFonts.cormorantGaramond(
+              color: widget.fg,
+              fontSize: 28,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Enter your current password and choose a new one.',
+            style: GoogleFonts.inter(color: widget.muted, fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          if (_success) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: widget.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded, color: widget.accent, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Password updated successfully.',
+                      style: GoogleFonts.inter(color: widget.fg, fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ] else ...[
+            _PasswordField(
+              label: 'Current password',
+              controller: _currentCtrl,
+              obscure: _obscureCurrent,
+              fg: widget.fg,
+              muted: widget.muted,
+              line: widget.line,
+              accent: widget.accent,
+              onToggle: () => setState(() => _obscureCurrent = !_obscureCurrent),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 4),
+            _PasswordField(
+              label: 'New password',
+              controller: _newCtrl,
+              obscure: _obscureNew,
+              fg: widget.fg,
+              muted: widget.muted,
+              line: widget.line,
+              accent: widget.accent,
+              onToggle: () => setState(() => _obscureNew = !_obscureNew),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 4),
+            _PasswordField(
+              label: 'Confirm new password',
+              controller: _confirmCtrl,
+              obscure: _obscureConfirm,
+              fg: widget.fg,
+              muted: widget.muted,
+              line: widget.line,
+              accent: widget.accent,
+              onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _loading ? null : _submit(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: GoogleFonts.inter(
+                  color: Colors.red.shade400,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: _loading ? null : _submit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: widget.accent,
+                  shape: const StadiumBorder(),
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text(
+                        'Update password',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  const _PasswordField({
+    required this.label,
+    required this.controller,
+    required this.obscure,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.accent,
+    required this.onToggle,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final bool obscure;
+  final Color fg, muted, line, accent;
+  final VoidCallback onToggle;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.jetBrainsMono(
+              color: muted,
+              fontSize: 10,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  textInputAction: textInputAction,
+                  onSubmitted: onSubmitted,
+                  style: GoogleFonts.inter(color: fg, fontSize: 17, fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: '••••••••••',
+                    hintStyle: GoogleFonts.inter(
+                      color: muted.withValues(alpha: 0.5),
+                      fontSize: 17,
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: onToggle,
+                child: Text(
+                  obscure ? 'Show' : 'Hide',
+                  style: GoogleFonts.inter(
+                    color: accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

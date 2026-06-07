@@ -26,9 +26,9 @@ final _shellKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   // Only watch routing-relevant fields — prevents router rebuild on every card tap
-  final (:isLoaded, :signInDone, :onboardingDone) = ref.watch(
+  final (:isLoaded, :signInDone, :onboardingDone, :introSeen) = ref.watch(
     religionProvider.select(
-      (s) => (isLoaded: s.isLoaded, signInDone: s.signInDone, onboardingDone: s.onboardingDone),
+      (s) => (isLoaded: s.isLoaded, signInDone: s.signInDone, onboardingDone: s.onboardingDone, introSeen: s.introSeen),
     ),
   );
 
@@ -40,21 +40,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       if (loc == '/splash') return null;
 
-      if (!signInDone) {
-        const preAuthPaths = ['/onboarding', '/sign-in', '/verify-email', '/profile-setup'];
-        final allowed = preAuthPaths.any((p) => loc.startsWith(p));
-        if (!allowed) return '/onboarding';
+      // First-ever app launch — show intro slides
+      if (!introSeen) {
+        const introAllowed = ['/onboarding', '/sign-in'];
+        if (!introAllowed.any((p) => loc.startsWith(p))) return '/onboarding';
         return null;
       }
 
+      // Returning user / signed out — go to sign-in, not intro slides
+      if (!signInDone) {
+        const preAuthPaths = ['/sign-in', '/verify-email', '/onboarding'];
+        if (!preAuthPaths.any((p) => loc.startsWith(p))) return '/sign-in';
+        return null;
+      }
+
+      // Signed in but hasn't finished onboarding (new account, needs religion/text/profile)
       if (!onboardingDone) {
         const onboardingPaths = ['/onboarding/religion', '/onboarding/text', '/profile-setup', '/sign-in'];
-        final allowed = onboardingPaths.any((p) => loc.startsWith(p));
-        if (!allowed) return '/onboarding/religion';
+        if (!onboardingPaths.any((p) => loc.startsWith(p))) return '/onboarding/religion';
         return null;
       }
 
-      // Allow text reselection from profile settings even when fully authenticated
+      // Fully authenticated — allow text reselection from profile, redirect pre-auth paths to home
       if (loc == '/onboarding/text') return null;
       const preAuthPaths = ['/onboarding', '/sign-in'];
       if (preAuthPaths.any((p) => loc.startsWith(p))) return '/home';

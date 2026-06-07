@@ -141,7 +141,16 @@ class ReadingPlanNotifier extends StateNotifier<ReadingPlanState> {
 
   Future<void> deletePlan(String planId) async {
     await _save(state.plans.where((p) => p.id != planId).toList());
-    unawaited(_repo.deleteRemotePlan(planId));
+    await _repo.deleteRemotePlan(planId);
+  }
+
+  void clear() {
+    state = const ReadingPlanState(isLoading: true);
+  }
+
+  Future<void> reload() async {
+    state = const ReadingPlanState(isLoading: true);
+    await _load();
   }
 
   Future<void> updateLastRead(String planId, int unit) async {

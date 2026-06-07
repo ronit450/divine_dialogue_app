@@ -9,7 +9,10 @@ class ReadingPlanRepository {
   ReadingPlanRepository._();
   static final instance = ReadingPlanRepository._();
 
-  static const _plansKey = 'reading_plans_v1';
+  static String get _plansKey {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    return 'reading_plans_${uid}_v1';
+  }
   static const _maybeLaterKey = 'reading_popup_maybe_later_at';
   static const _shownDatesKey = 'reading_popup_shown_dates';
 

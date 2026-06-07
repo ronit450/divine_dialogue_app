@@ -30,6 +30,10 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
     state = state.copyWith(sessions: _sorted(sessions), isLoaded: true);
   }
 
+  void clearState() {
+    state = const HistoryState();
+  }
+
   void deleteSession(String sessionId) {
     state = state.copyWith(
       sessions: state.sessions.where((s) => s.id != sessionId).toList(),

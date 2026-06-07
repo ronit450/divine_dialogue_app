@@ -40,6 +40,12 @@ class SavedVersesNotifier extends StateNotifier<List<SavedVerse>> {
     _localWritten = false;
     state = const [];
   }
+
+  Future<void> reload() async {
+    _localWritten = false;
+    state = const [];
+    await _load();
+  }
 }
 
 final savedVersesProvider =
