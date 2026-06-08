@@ -14,7 +14,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
-  bool _isSignup = true;
+  bool _isSignup = false;
   bool _obscurePassword = true;
   bool _loading = false;
 
@@ -24,6 +24,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   void initState() {
     super.initState();
+    _isSignup = !ref.read(religionProvider).introSeen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.read(religionProvider.notifier).completeIntro();
     });
@@ -252,9 +253,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Future<void> _handleGoogle() async {
     setState(() => _loading = true);
     try {
-      await ref.read(authProvider.notifier).signInWithGoogle();
+      final isNewUser = await ref.read(authProvider.notifier).signInWithGoogle();
+      if (!mounted) return;
+      if (!_isSignup && isNewUser) {
+        await ref.read(authProvider.notifier).signOut();
+        if (mounted) _showNotRegisteredSheet();
+      } else if (_isSignup && !isNewUser) {
+        if (mounted) context.go('/welcome-back');
+      }
     } on Exception catch (e) {
-      if (mounted) _showError(_friendlyError(e.toString()));
+      if (!mounted) return;
+      final msg = e.toString();
+      if (!_isSignup && msg.contains('user-not-found')) {
+        _showNotRegisteredSheet();
+      } else if (_isSignup && msg.contains('email-already-in-use')) {
+        _showAccountExistsSheet();
+      } else {
+        _showError(_friendlyError(msg));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -272,6 +288,104 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(religionProvider.notifier).completeSignIn();
     if (mounted) context.go('/home');
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _showNotRegisteredSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final surface = isDark ? AppColors.nightSurface : Colors.white;
+    final accent = ref.read(religionProvider).selectedReligion?.accentColor ?? AppColors.islamGreen;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(28, 28, 28, 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No account found',
+              style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 30, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "We couldn't find an account with this email.\nWant to create one?",
+              style: GoogleFonts.inter(color: muted, fontSize: 15, height: 1.5),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() => _isSignup = true);
+                },
+                style: FilledButton.styleFrom(backgroundColor: accent, shape: const StadiumBorder()),
+                child: Text('Create account', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAccountExistsSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isDark ? AppColors.nightFg : AppColors.boneFg;
+    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final surface = isDark ? AppColors.nightSurface : Colors.white;
+    final accent = ref.read(religionProvider).selectedReligion?.accentColor ?? AppColors.islamGreen;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(28, 28, 28, 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Already with us',
+              style: GoogleFonts.cormorantGaramond(
+                color: fg, fontSize: 30, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'An account already exists with this email.\nSign in to continue.',
+              style: GoogleFonts.inter(color: muted, fontSize: 15, height: 1.5),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() => _isSignup = false);
+                },
+                style: FilledButton.styleFrom(backgroundColor: accent, shape: const StadiumBorder()),
+                child: Text('Sign in', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showForgotPasswordSheet() {

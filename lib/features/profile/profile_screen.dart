@@ -35,7 +35,12 @@ class ProfileScreen extends ConsumerWidget {
         ? '${userState.user!.firstName} ${userState.user!.lastName}'.trim()
         : 'Guest';
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/home');
+      },
+      child: Scaffold(
       backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
@@ -130,7 +135,7 @@ class ProfileScreen extends ConsumerWidget {
                             fg: fg,
                             muted: muted,
                             line: line,
-                            onTap: () => context.go('/profile-setup'),
+                            onTap: () => context.push('/profile-setup'),
                           ),
                           if (FirebaseAuth.instance.currentUser?.providerData
                               .any((p) => p.providerId == 'password') ?? false) ...[
@@ -346,6 +351,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

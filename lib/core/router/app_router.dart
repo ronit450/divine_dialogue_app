@@ -7,6 +7,7 @@ import '../../features/onboarding/onboarding_intro_screen.dart';
 import '../../features/onboarding/onboarding_religion_screen.dart';
 import '../../features/onboarding/onboarding_text_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
+import '../../features/auth/welcome_back_screen.dart';
 import '../../features/auth/email_verification_screen.dart';
 import '../../features/profile_setup/profile_setup_screen.dart';
 import '../../features/shell/app_shell.dart';
@@ -92,6 +93,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/verify-email',
         builder: (context, state) => const EmailVerificationScreen(),
+      ),
+      GoRoute(
+        path: '/welcome-back',
+        builder: (context, state) => const WelcomeBackScreen(),
       ),
       GoRoute(
         path: '/profile-setup',

@@ -99,7 +99,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<bool> signInWithGoogle() async {
     final googleUser = await GoogleSignIn().signIn();
     if (googleUser == null) throw Exception('Sign-in cancelled');
     final googleAuth = await googleUser.authentication;
@@ -108,10 +108,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       idToken: googleAuth.idToken,
     );
     final result = await FirebaseAuth.instance.signInWithCredential(credential);
+    final isNewUser = result.additionalUserInfo?.isNewUser ?? false;
     state = AuthState(uid: result.user?.uid, email: result.user?.email);
     if (result.user != null) {
       await _afterSignIn(result.user!);
     }
+    return isNewUser;
   }
 
   Future<void> signInAsGuest() async {
@@ -137,6 +139,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _ref.read(userProvider.notifier).clear();
     _ref.read(savedVersesProvider.notifier).clear();
     DivineApi.instance.clearCache();
+    await _ref.read(religionProvider.notifier).clearAuthState();
     await FirebaseAuth.instance.signOut();
     await GoogleSignIn().signOut();
     state = const AuthState();
