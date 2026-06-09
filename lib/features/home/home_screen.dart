@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show sin, pi;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -846,11 +847,17 @@ class _MessagesList extends StatelessWidget {
         if (i == messages.length) {
           if (chatState.isStreaming) {
             return _StreamingBubble(
+              preamble: chatState.streamingPreamble,
               text: chatState.streamingText,
+              hasToolCall: chatState.hasToolCall,
+              statusMessage: chatState.statusMessage,
+              passages: chatState.streamingPassages,
               accent: accent,
               isDark: isDark,
               fg: fg,
+              muted: muted,
               line: line,
+              textId: textId,
             );
           }
           return _TypingIndicator(accent: accent, isDark: isDark, line: line);
@@ -860,6 +867,7 @@ class _MessagesList extends StatelessWidget {
           accent: accent,
           isDark: isDark,
           fg: fg,
+          muted: muted,
           line: line,
           textId: textId,
         );
@@ -2006,6 +2014,7 @@ class _MessageBubble extends StatelessWidget {
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
     this.textId,
   });
@@ -2014,12 +2023,13 @@ class _MessageBubble extends StatelessWidget {
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
   final String? textId;
 
   void _showCitationsSheet(BuildContext context) {
     final sheetBg = isDark ? AppColors.nightBg : AppColors.boneBg;
-    final muted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
+    final sheetMuted = isDark ? AppColors.nightMuted : AppColors.boneMuted;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -2030,7 +2040,7 @@ class _MessageBubble extends StatelessWidget {
         accent: accent,
         isDark: isDark,
         fg: fg,
-        muted: muted,
+        muted: sheetMuted,
         line: line,
         sheetBg: sheetBg,
         textId: textId,
@@ -2043,6 +2053,10 @@ class _MessageBubble extends StatelessWidget {
     final isUser = message.isUser;
     final hasCitations = !isUser && message.citations.isNotEmpty;
     final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+
+    final hasPreamble = !isUser && message.preamble.isNotEmpty;
+    final hasToolCall = !isUser && message.hasToolCall;
+    final hasAnswer = message.text.trimLeft().isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -2088,14 +2102,52 @@ class _MessageBubble extends StatelessWidget {
                     border:
                         isUser ? null : Border.all(color: line, width: 1),
                   ),
-                  child: Text(
-                    message.text,
-                    style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : fg,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
+                  child: isUser
+                      ? Text(
+                          message.text,
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (hasPreamble) ...[
+                              Text(
+                                message.preamble,
+                                style: GoogleFonts.inter(
+                                  color: muted,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 13,
+                                  height: 1.55,
+                                ),
+                              ),
+                              if (hasToolCall || hasAnswer)
+                                const SizedBox(height: 10),
+                            ],
+                            if (hasToolCall) ...[
+                              _HomeToolCallBlock(
+                                isRunning: false,
+                                passageCount: message.citations.length,
+                                muted: muted,
+                                line: line,
+                                textId: textId,
+                              ),
+                              if (hasAnswer) const SizedBox(height: 10),
+                            ],
+                            if (hasAnswer)
+                              Text(
+                                message.text,
+                                style: GoogleFonts.inter(
+                                  color: fg,
+                                  fontSize: 14,
+                                  height: 1.5,
+                                ),
+                              ),
+                          ],
+                        ),
                 ),
               ),
             ],
@@ -2362,32 +2414,49 @@ class _CitationCard extends StatelessWidget {
 
 class _StreamingBubble extends StatelessWidget {
   const _StreamingBubble({
+    required this.preamble,
     required this.text,
+    required this.hasToolCall,
+    required this.statusMessage,
+    required this.passages,
     required this.accent,
     required this.isDark,
     required this.fg,
+    required this.muted,
     required this.line,
+    this.textId,
   });
 
+  final String preamble;
   final String text;
+  final bool hasToolCall;
+  final String statusMessage;
+  final List<Citation> passages;
   final Color accent;
   final bool isDark;
   final Color fg;
+  final Color muted;
   final Color line;
+  final String? textId;
 
   @override
   Widget build(BuildContext context) {
     final aiBg = isDark ? AppColors.nightSurface : AppColors.boneSurface;
+    final hasPreamble = preamble.isNotEmpty;
+    final hasAnswer = text.trimLeft().isNotEmpty;
+    final toolRunning = hasToolCall && !hasAnswer;
+    final showDots = !hasPreamble && !hasToolCall && !hasAnswer;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 28,
             height: 28,
-            margin: const EdgeInsets.only(right: 8, bottom: 2),
+            margin: const EdgeInsets.only(right: 8, top: 2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: accent.withValues(alpha: 0.12),
@@ -2398,9 +2467,8 @@ class _StreamingBubble extends StatelessWidget {
                 Icon(Icons.auto_stories_rounded, color: accent, size: 13),
           ),
           Flexible(
+            fit: FlexFit.tight,
             child: Container(
-              constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.75),
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -2413,19 +2481,57 @@ class _StreamingBubble extends StatelessWidget {
                 ),
                 border: Border.all(color: line, width: 1),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Text(
-                      text,
+                  if (hasPreamble) ...[
+                    Text(
+                      preamble,
                       style: GoogleFonts.inter(
-                          color: fg, fontSize: 14, height: 1.5),
+                        color: muted,
+                        fontStyle: FontStyle.italic,
+                        fontSize: 13,
+                        height: 1.55,
+                      ),
                     ),
+                    if (hasToolCall || hasAnswer)
+                      const SizedBox(height: 10),
+                  ],
+                  if (hasToolCall) ...[
+                    _HomeToolCallBlock(
+                      isRunning: toolRunning,
+                      passageCount: passages.length,
+                      statusMessage: statusMessage,
+                      muted: muted,
+                      line: line,
+                      textId: textId,
+                    ),
+                    if (hasAnswer) const SizedBox(height: 10),
+                  ],
+                  if (hasAnswer) Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          text,
+                          style: GoogleFonts.inter(
+                              color: fg, fontSize: 14, height: 1.5),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      _BlinkingCursor(color: accent),
+                    ],
                   ),
-                  const SizedBox(width: 2),
-                  _BlinkingCursor(color: accent),
+                  if (showDots)
+                    _HomeToolCallBlock(
+                      isRunning: true,
+                      passageCount: 0,
+                      statusMessage: '',
+                      muted: muted,
+                      line: line,
+                      textId: textId,
+                    ),
                 ],
               ),
             ),
@@ -2476,6 +2582,183 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
           borderRadius: BorderRadius.circular(1),
         ),
       ),
+    );
+  }
+}
+
+String _homeBookDisplayName(String? textId) {
+  switch (textId) {
+    case 'quran': return 'the Quran';
+    case 'guru_granth_sahib': return 'Guru Granth Sahib';
+    case 'bible_nrsv': return 'the Bible';
+    case 'bhagavad_gita': return 'Bhagavad Gita';
+    case 'dasam_granth': return 'Dasam Granth';
+    case 'bhai_gurdas_vaaran': return 'Bhai Gurdas Vaaran';
+    case 'valmiki_ramayana': return 'Valmiki Ramayana';
+    case 'bukhari': return 'Sahih Bukhari';
+    case 'muslim': return 'Sahih Muslim';
+    case 'abu_dawud': return 'Abu Dawud';
+    case 'tirmidhi': return 'Tirmidhi';
+    case 'nasai': return 'An-Nasai';
+    case 'ibn_majah': return 'Ibn Majah';
+    default: return 'sacred texts';
+  }
+}
+
+class _HomeToolCallBlock extends StatefulWidget {
+  const _HomeToolCallBlock({
+    required this.isRunning,
+    required this.passageCount,
+    required this.muted,
+    required this.line,
+    this.statusMessage = '',
+    this.textId,
+  });
+  final bool isRunning;
+  final int passageCount;
+  final String statusMessage;
+  final Color muted;
+  final Color line;
+  final String? textId;
+
+  @override
+  State<_HomeToolCallBlock> createState() => _HomeToolCallBlockState();
+}
+
+class _HomeToolCallBlockState extends State<_HomeToolCallBlock>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const doneColor = Color(0xFF2E9D5C);
+    final bookName = _homeBookDisplayName(widget.textId);
+
+    if (!widget.isRunning) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: doneColor.withValues(alpha: 0.07),
+          border: Border.all(color: doneColor.withValues(alpha: 0.30), width: 0.8),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 17,
+              height: 17,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: doneColor.withValues(alpha: 0.15),
+              ),
+              child: Icon(Icons.check_rounded, size: 11, color: doneColor),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+                  children: [
+                    TextSpan(
+                      text: 'Searched $bookName',
+                      style: const TextStyle(color: doneColor),
+                    ),
+                    if (widget.passageCount > 0) ...[
+                      TextSpan(
+                        text: '  ·  ',
+                        style: TextStyle(color: doneColor.withValues(alpha: 0.45)),
+                      ),
+                      TextSpan(
+                        text: '${widget.passageCount} passage${widget.passageCount == 1 ? '' : 's'}',
+                        style: GoogleFonts.inter(
+                          color: doneColor.withValues(alpha: 0.65),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final searchLabel = widget.statusMessage.isNotEmpty
+        ? widget.statusMessage
+        : 'Searching $bookName…';
+
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, _) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: widget.muted.withValues(alpha: 0.07),
+            border: Border.all(
+              color: widget.muted.withValues(alpha: 0.25),
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ...List.generate(3, (i) {
+                final phase = (_pulse.value - i / 3.0 + 1.0) % 1.0;
+                final t = (phase / 0.4).clamp(0.0, 1.0);
+                final bounce = sin(t * pi).clamp(0.0, 1.0);
+                return Padding(
+                  padding: EdgeInsets.only(right: i < 2 ? 4.0 : 0),
+                  child: Transform.translate(
+                    offset: Offset(0, -bounce * 3),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.muted.withValues(alpha: 0.4 + bounce * 0.6),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  searchLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: widget.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

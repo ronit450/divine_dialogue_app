@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../core/models/chat_message.dart';
@@ -328,7 +329,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       // Commit the full in-progress state to history — preamble + hasToolCall
       // ride along so the bubble layout doesn't shift after `done`.
-      final aiMsg = ChatMessage(
+final aiMsg = ChatMessage(
         id: _uuid.v4(),
         text: answerBuffer.toString(),
         isUser: false,

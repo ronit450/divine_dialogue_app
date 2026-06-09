@@ -595,6 +595,8 @@ class _AgentBubble extends StatelessWidget {
     final showLoadingDots =
         isStreaming && !hasPreamble && !hasToolCall && !hasAnswer;
 
+
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -663,6 +665,7 @@ class _AgentBubble extends StatelessWidget {
                           isDark: isDark,
                           muted: muted,
                           line: line,
+                          textId: textId,
                         ),
                         if (hasAnswer) const SizedBox(height: 10),
                       ],
@@ -705,8 +708,18 @@ class _AgentBubble extends StatelessWidget {
                         ),
                       ],
 
-                      // Initial loading state — visible before any preamble arrives
-                      if (showLoadingDots) _ThinkingIndicator(accent: accent, muted: muted),
+                      // Initial loading state — show searching pill immediately
+                      // so the user sees "Searching the Quran…" from the first frame.
+                      if (showLoadingDots) _ToolCallBlock(
+                        isRunning: true,
+                        passageCount: 0,
+                        statusMessage: '',
+                        accent: accent,
+                        isDark: isDark,
+                        muted: muted,
+                        line: line,
+                        textId: textId,
+                      ),
                     ],
                   ),
                 ),
@@ -799,6 +812,7 @@ class _ToolCallBlock extends StatefulWidget {
     required this.isDark,
     required this.muted,
     required this.line,
+    this.textId,
   });
 
   final bool isRunning;
@@ -808,6 +822,7 @@ class _ToolCallBlock extends StatefulWidget {
   final bool isDark;
   final Color muted;
   final Color line;
+  final String? textId;
 
   @override
   State<_ToolCallBlock> createState() => _ToolCallBlockState();
@@ -816,17 +831,14 @@ class _ToolCallBlock extends StatefulWidget {
 class _ToolCallBlockState extends State<_ToolCallBlock>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulse;
-  late Animation<double> _alpha;
 
   @override
   void initState() {
     super.initState();
     _pulse = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _alpha = Tween<double>(begin: 0.04, end: 0.14)
-        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
+      duration: const Duration(milliseconds: 1050),
+    )..repeat();
   }
 
   @override
@@ -837,66 +849,146 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
 
   @override
   Widget build(BuildContext context) {
-    final doneColor = const Color(0xFF2E9D5C);
-    final blockBg = (widget.isDark ? AppColors.nightBg : AppColors.boneBg)
-        .withValues(alpha: widget.isDark ? 0.6 : 1.0);
-    final borderColor = widget.isRunning
-        ? widget.accent.withValues(alpha: 0.35)
-        : doneColor.withValues(alpha: 0.6);
-    final fgColor = widget.isRunning ? widget.muted : doneColor;
+    const doneColor = Color(0xFF2E9D5C);
+    final bookName = _bookDisplayName(widget.textId);
 
-    final label = widget.isRunning
-        ? (widget.statusMessage.isNotEmpty ? widget.statusMessage : 'Searching…')
-        : 'Found ${widget.passageCount} passage${widget.passageCount == 1 ? '' : 's'}';
-
-    return AnimatedBuilder(
-      animation: _alpha,
-      builder: (_, child) => Container(
+    if (!widget.isRunning) {
+      // ── Done pill ─────────────────────────────────────────────
+      return Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: widget.isRunning
-              ? widget.accent.withValues(alpha: _alpha.value)
-              : blockBg,
-          border: Border.all(color: borderColor, width: 0.8),
+          color: doneColor.withValues(alpha: 0.07),
+          border: Border.all(color: doneColor.withValues(alpha: 0.30), width: 0.8),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: child,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.isRunning)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
+        child: Row(
+          children: [
+            Container(
+              width: 17,
+              height: 17,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: doneColor.withValues(alpha: 0.15),
               ),
-            )
-          else
-            Icon(Icons.check_rounded, size: 14, color: doneColor),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: fgColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.1,
+              child: Icon(Icons.check_rounded, size: 11, color: doneColor),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+                  children: [
+                    TextSpan(
+                      text: 'Searched $bookName',
+                      style: TextStyle(color: doneColor),
+                    ),
+                    if (widget.passageCount > 0) ...[
+                      TextSpan(
+                        text: '  ·  ',
+                        style: TextStyle(color: doneColor.withValues(alpha: 0.45)),
+                      ),
+                      TextSpan(
+                        text: '${widget.passageCount} passage${widget.passageCount == 1 ? '' : 's'}',
+                        style: GoogleFonts.inter(
+                          color: doneColor.withValues(alpha: 0.65),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+          ],
+        ),
+      );
+    }
+
+    // ── Running pill (bouncing dots + label, matches design spec) ─
+    final searchLabel = widget.statusMessage.isNotEmpty
+        ? widget.statusMessage
+        : 'Searching $bookName…';
+
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, _) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: widget.muted.withValues(alpha: 0.07),
+            border: Border.all(
+              color: widget.muted.withValues(alpha: 0.25),
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ...List.generate(3, (i) {
+                final phase = (_pulse.value - i / 3.0 + 1.0) % 1.0;
+                final t = (phase / 0.4).clamp(0.0, 1.0);
+                final bounce = sin(t * pi).clamp(0.0, 1.0);
+                return Padding(
+                  padding: EdgeInsets.only(right: i < 2 ? 4.0 : 0),
+                  child: Transform.translate(
+                    offset: Offset(0, -bounce * 3),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.muted
+                            .withValues(alpha: 0.4 + bounce * 0.6),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  searchLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: widget.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
 // ─── Passage card (rendered below the bubble) ────────────────────────────────
+
+String _bookDisplayName(String? textId) {
+  switch (textId) {
+    case 'quran': return 'the Quran';
+    case 'guru_granth_sahib': return 'Guru Granth Sahib';
+    case 'bible_nrsv': return 'the Bible';
+    case 'bhagavad_gita': return 'Bhagavad Gita';
+    case 'dasam_granth': return 'Dasam Granth';
+    case 'bhai_gurdas_vaaran': return 'Bhai Gurdas Vaaran';
+    case 'valmiki_ramayana': return 'Valmiki Ramayana';
+    case 'bukhari': return 'Sahih Bukhari';
+    case 'muslim': return 'Sahih Muslim';
+    case 'abu_dawud': return 'Abu Dawud';
+    case 'tirmidhi': return 'Tirmidhi';
+    case 'nasai': return 'An-Nasai';
+    case 'ibn_majah': return 'Ibn Majah';
+    default: return 'sacred texts';
+  }
+}
 
 int? _parseChapterFromReference(String reference) {
   final match = RegExp(r'(\d+)').firstMatch(reference);

@@ -128,7 +128,8 @@ class DivineApi {
   }
 
   ApiStreamEvent? _parseEvent(Map<String, dynamic> j) {
-    switch (j['type'] as String?) {
+    final type = j['type'] as String?;
+    switch (type) {
       case 'status':
         return ApiStreamStatus(j['message'] as String? ?? '');
       case 'passage':
