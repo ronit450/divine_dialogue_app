@@ -45,6 +45,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   String? _error;
   bool _showTranslation = true;
   bool _showTranslit = true;
+  bool _quranPageMode = false; // true = reading-plan paged mode; false = surah mode
   bool _dismissedEndCard = false;
   bool _waitingForDownload = false;
   bool _searching = false;
@@ -123,13 +124,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   bool get _isPagedType =>
-      _meta!.type == ScriptureTextType.quran ||
+      (_meta!.type == ScriptureTextType.quran && _quranPageMode) ||
       _meta!.type == ScriptureTextType.ggs ||
       _meta!.type == ScriptureTextType.dasam ||
       _meta!.type == ScriptureTextType.bgv ||
       _meta!.type == ScriptureTextType.hadith ||
       _meta!.type == ScriptureTextType.ramayana ||
       _meta!.type == ScriptureTextType.bani;
+
+  // Max chapter/page for the current text and mode.
+  int get _maxChapter {
+    if (_meta!.type == ScriptureTextType.quran) {
+      return _quranPageMode ? QuranPageMapper.totalSurahBreakPages : 114;
+    }
+    return _meta!.totalChapters;
+  }
 
   bool get _isSikhType =>
       _meta!.type == ScriptureTextType.ggs ||
@@ -140,19 +149,33 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final isFirstOpen = !prefs.containsKey('reader_pos_${widget.textId}');
-
     final saved = ref.read(scripturePositionProvider).getPosition(widget.textId);
-    _currentChapter = widget.initialChapter ?? saved.$1;
-    // Quran is paged but uses surah-list TOC — pre-load chapters for it
+
     if (_meta!.type == ScriptureTextType.quran) {
       _chapters = await _repo.loadChapters(widget.textId);
+      final plan = ref.read(readingPlanProvider).planForText(widget.textId);
+      _quranPageMode = plan != null;
+      final raw = widget.initialChapter ?? saved.$1;
+      if (_quranPageMode) {
+        _currentChapter = raw.clamp(1, QuranPageMapper.totalSurahBreakPages);
+      } else {
+        // Convert old page-based position (>114) to surah number.
+        _currentChapter = raw > 114
+            ? QuranPageMapper.pageToSurah(raw.clamp(1, QuranPageMapper.totalPages))
+            : raw.clamp(1, 114);
+      }
+    } else {
+      _currentChapter = widget.initialChapter ?? saved.$1;
     }
+
     try {
       if (_isPagedType) {
         _verses = await _loadPagedVerses(_currentChapter);
         _prefetch(_currentChapter);
       } else {
-        _chapters = await _repo.loadChapters(widget.textId);
+        if (_meta!.type != ScriptureTextType.quran) {
+          _chapters = await _repo.loadChapters(widget.textId);
+        }
         _verses = _versesFor(_currentChapter);
       }
     } catch (e) {
@@ -171,7 +194,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Future<List<ScriptureVerse>> _loadPagedVerses(int page) {
     return switch (_meta!.type) {
-      ScriptureTextType.quran    => _repo.loadQuranPage(page),
+      ScriptureTextType.quran    => _repo.loadQuranSurahBreakPage(page),
       ScriptureTextType.ggs      => _repo.loadGgsAng(page),
       ScriptureTextType.dasam    => _repo.loadDasamPage(page),
       ScriptureTextType.bgv      => _repo.loadBgvVaar(page),
@@ -183,9 +206,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _prefetch(int page) {
-    final max = _meta!.totalChapters;
     if (page > 1) _loadPagedVerses(page - 1);
-    if (page < max) _loadPagedVerses(page + 1);
+    if (page < _maxChapter) _loadPagedVerses(page + 1);
   }
 
   List<ScriptureVerse> _versesFor(int num) {
@@ -198,8 +220,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   Future<void> _goTo(int num) async {
-    final max = _meta!.totalChapters;
-    if (num < 1 || num > max) return;
+    if (num < 1 || num > _maxChapter) return;
     setState(() { _loading = true; _dismissedEndCard = false; _reachedBottom = false; });
     _currentChapter = num;
     try {
@@ -234,10 +255,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (_meta!.type == ScriptureTextType.quran) {
       result = await showTocSheet(
         context: context, meta: _meta!, chapters: _chapters,
-        currentChapter: QuranPageMapper.pageToSurah(_currentChapter),
+        currentChapter: _quranPageMode
+            ? QuranPageMapper.surahBreakPageToSurah(_currentChapter)
+            : _currentChapter,
         accent: accent, isDark: isDark,
       );
-      if (result != null) await _goTo(QuranPageMapper.surahToPage(result));
+      if (result != null) {
+        await _goTo(_quranPageMode
+            ? QuranPageMapper.surahToSurahBreakPage(result)
+            : result);
+      }
       return;
     }
 
@@ -366,7 +393,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   String get _subLabel {
-    if (_isPagedType) return '${_meta!.chapterLabel} $_currentChapter of ${_meta!.totalChapters}';
+    if (_isPagedType) return '${_meta!.chapterLabel} $_currentChapter of $_maxChapter';
     if (_chapters.isEmpty) return '';
     final ch = _chapters.firstWhere(
       (c) => c.number == _currentChapter, orElse: () => _chapters.first,
@@ -386,6 +413,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           nextStatus == TextDownloadStatus.downloaded) {
         setState(() => _waitingForDownload = false);
         _load();
+      }
+    });
+
+    // Reading plans load async from Firestore. If _load() ran before plans
+    // finished loading, _quranPageMode may be wrong — fix it here.
+    ref.listen<ReadingPlanState>(readingPlanProvider, (prev, next) {
+      if ((prev?.isLoading ?? true) && !next.isLoading &&
+          mounted && _meta?.type == ScriptureTextType.quran && !_loading) {
+        final hasPlan = next.planForText(widget.textId) != null;
+        if (hasPlan != _quranPageMode) {
+          _quranPageMode = hasPlan;
+          final target = hasPlan
+              ? QuranPageMapper.surahToSurahBreakPage(_currentChapter.clamp(1, 114))
+              : QuranPageMapper.surahBreakPageToSurah(
+                  _currentChapter.clamp(1, QuranPageMapper.totalSurahBreakPages));
+          _goTo(target);
+        }
       }
     });
 
@@ -588,8 +632,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ),
                   _navBtn(
                     icon: Icons.arrow_forward_ios_rounded,
-                    color: _currentChapter < (_meta?.totalChapters ?? 1) ? fg : muted,
-                    onTap: _currentChapter < (_meta?.totalChapters ?? 1) ? () => _goTo(_currentChapter + 1) : null,
+                    color: _currentChapter < _maxChapter ? fg : muted,
+                    onTap: _currentChapter < _maxChapter ? () => _goTo(_currentChapter + 1) : null,
                   ),
                 ],
               ),
@@ -1003,7 +1047,7 @@ class _VerseCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final card = switch (type) {
-      ScriptureTextType.quran    => _quranCard(ref),
+      ScriptureTextType.quran    => _quranCard(context, ref),
       ScriptureTextType.ggs      => _sikhCard(),
       ScriptureTextType.dasam    => _sikhCard(),
       ScriptureTextType.bgv      => _sikhCard(),
@@ -1088,74 +1132,98 @@ class _VerseCard extends ConsumerWidget {
     );
   }
 
-  Widget _quranCard(WidgetRef ref) => Padding(
-        padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 24.0 : 18.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (verse.isGroupStart && (verse.groupLabel?.isNotEmpty ?? false)) ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12, top: 4),
-                child: Text(
-                  verse.groupLabel!,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.cormorantGaramond(
-                    fontSize: 15,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w600,
-                    color: accent,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-            if (verse.original != null)
-              Text(
-                verse.original!,
-                textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
-                style: const TextStyle(fontSize: 20, height: 2.0, fontFamily: 'serif'),
-              ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Builder(builder: (_) {
-                  final chNum = int.tryParse(verse.wordMeanings ?? '') ?? currentChapter;
-                  final id = SavedVerse.makeId(textId, chNum, verse.number);
-                  final saved = ref.watch(savedVersesProvider).any((sv) => sv.id == id);
-                  return saved
-                      ? Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Icon(Icons.bookmark, size: 14, color: accent),
-                        )
-                      : const SizedBox.shrink();
-                }),
-                Container(
-                  width: 22, height: 22,
-                  margin: const EdgeInsets.only(top: 4, bottom: 8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle, border: Border.all(color: accent, width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text('${verse.number}',
-                      style: GoogleFonts.jetBrainsMono(fontSize: 8, color: accent)),
-                  ),
-                ),
-              ],
-            ),
-            if (showTranslit && verse.transliteration != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  verse.transliteration!,
-                  style: GoogleFonts.inter(fontSize: 12, height: 1.6, color: muted, fontStyle: FontStyle.italic),
-                ),
-              ),
-            if (showTranslation)
-              Text(verse.translation, style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg)),
-          ],
-        ),
+  Widget _quranCard(BuildContext context, WidgetRef ref) {
+    final chNum = int.tryParse(verse.wordMeanings ?? '') ?? currentChapter;
+    final id = SavedVerse.makeId(textId, chNum, verse.number);
+    final isSaved = ref.watch(savedVersesProvider).any((sv) => sv.id == id);
+
+    // Number circle widget — placed inline at the end of the Arabic text.
+    Widget numberCircle = Container(
+      width: 22,
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: accent, width: 1.5),
+      ),
+      child: Center(
+        child: Text('${verse.number}',
+            style: GoogleFonts.jetBrainsMono(fontSize: 8, color: accent)),
+      ),
+    );
+
+    if (isSaved) {
+      numberCircle = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bookmark, size: 14, color: accent),
+          const SizedBox(width: 2),
+          numberCircle,
+        ],
       );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: onlyOriginal ? 24.0 : 18.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (verse.isGroupStart && (verse.groupLabel?.isNotEmpty ?? false))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12, top: 4),
+              child: Text(
+                verse.groupLabel!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.cormorantGaramond(
+                  fontSize: 15,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          if (verse.original != null)
+            RichText(
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              text: TextSpan(
+                style: TextStyle(
+                    fontSize: 20, height: 2.0, fontFamily: 'serif', color: fg),
+                children: [
+                  TextSpan(text: verse.original!),
+                  // WidgetSpan appended after last Arabic word → sits at the
+                  // left end of the final line in RTL flow.
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: numberCircle,
+                  ),
+                ],
+              ),
+            ),
+          if (showTranslit && verse.transliteration != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 6),
+              child: Text(
+                verse.transliteration!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.6,
+                    color: muted,
+                    fontStyle: FontStyle.italic),
+              ),
+            ),
+          if (showTranslation)
+            Text(
+              verse.translation,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 13, height: 1.65, color: fg),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _sikhCard() {
     // For non-GGS: section title = original Gurmukhi text that opens with ॥ (e.g. ॥ ਜਪੁ ॥)

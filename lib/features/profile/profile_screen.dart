@@ -129,6 +129,15 @@ class ProfileScreen extends ConsumerWidget {
                       isDark: isDark,
                       child: Column(
                         children: [
+                          if (authState.email != null) ...[
+                            _InfoRow(
+                              label: 'Signed in as',
+                              value: authState.email!,
+                              fg: fg,
+                              muted: muted,
+                            ),
+                            Divider(height: 1, color: line),
+                          ],
                           _ActionRow(
                             icon: Icons.person_outline_rounded,
                             label: 'Edit profile',

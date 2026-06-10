@@ -69,6 +69,11 @@ class ScriptureRepository {
     return QuranPageMapper.buildPageVerses(page, _quranChapters!);
   }
 
+  Future<List<ScriptureVerse>> loadQuranSurahBreakPage(int page) async {
+    _quranChapters ??= await loadChapters('quran');
+    return QuranPageMapper.buildSurahBreakPageVerses(page, _quranChapters!);
+  }
+
   Future<List<ScriptureVerse>> loadRamayanaSarga(int sarga) async =>
       _loadPagedText('valmiki_ramayana', sarga, 'valmiki_ramayana', 'ramayana', 648, 50,
           chunkLoader: _loadRamayanaChunk);

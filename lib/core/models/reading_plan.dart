@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'quran_page_mapper.dart';
 
 class TextReadingMeta {
   static const _counts = <String, int>{
-    'quran': 780,
+    'quran': 780, // overridden below by totalSurahBreakPages
     'guru_granth_sahib': 1430,
     'dasam_granth': 1428,
     'bhai_gurdas_vaaran': 40,
@@ -58,7 +59,10 @@ class TextReadingMeta {
     'paul_letters': 5,
   };
 
-  static int totalUnits(String textId) => _counts[textId] ?? 100;
+  static int totalUnits(String textId) {
+    if (textId == 'quran') return QuranPageMapper.totalSurahBreakPages;
+    return _counts[textId] ?? 100;
+  }
   static String unitLabel(String textId) => _labels[textId] ?? 'pages';
   static int minutesPerUnit(String textId) => _minsPerUnit[textId] ?? 3;
 }

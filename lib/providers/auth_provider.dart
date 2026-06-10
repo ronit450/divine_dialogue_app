@@ -23,8 +23,14 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
   (ref) => AuthNotifier(ref),
 );
 
+AuthState _stateFromCurrentUser() {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return const AuthState();
+  return AuthState(uid: user.uid, email: user.email, isGuest: user.isAnonymous);
+}
+
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._ref) : super(const AuthState());
+  AuthNotifier(this._ref) : super(_stateFromCurrentUser());
 
   final Ref _ref;
 

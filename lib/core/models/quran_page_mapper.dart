@@ -4,7 +4,28 @@ class QuranPageMapper {
   QuranPageMapper._();
 
   static const int versesPerPage = 8;
-  static const int totalPages = 780; // ceil(6236 / 8)
+  static const int totalPages = 780; // ceil(6236 / 8) — legacy uniform pages
+
+  // Surah-break pages: each page stays within one surah (≤8 ayats).
+  // First page number for each surah (0-indexed).
+  static final List<int> _surahBreakPageStart = () {
+    final starts = <int>[];
+    int page = 1;
+    for (final count in _verseCounts) {
+      starts.add(page);
+      page += (count + versesPerPage - 1) ~/ versesPerPage;
+    }
+    return List<int>.unmodifiable(starts);
+  }();
+
+  // Total pages with surah breaks (824 for the Quran).
+  static final int totalSurahBreakPages = () {
+    int total = 0;
+    for (final count in _verseCounts) {
+      total += (count + versesPerPage - 1) ~/ versesPerPage;
+    }
+    return total;
+  }();
 
   static const List<int> _verseCounts = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109,
@@ -72,6 +93,51 @@ class QuranPageMapper {
     }
     return lo;
   }
+
+  // ── Surah-break pagination helpers ─────────────────────────────────────
+
+  static int _surahIdxForBreakPage(int page) {
+    int lo = 0, hi = _verseCounts.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) ~/ 2;
+      if (_surahBreakPageStart[mid] <= page) { lo = mid; } else { hi = mid - 1; }
+    }
+    return lo;
+  }
+
+  /// Surah number (1-based) that contains [page] in the surah-break scheme.
+  static int surahBreakPageToSurah(int page) =>
+      _surahIdxForBreakPage(page) + 1;
+
+  /// First page (1-based, surah-break scheme) of [surah] (1-based).
+  static int surahToSurahBreakPage(int surah) =>
+      _surahBreakPageStart[surah - 1];
+
+  /// Builds up to [versesPerPage] verses for [page] (1-based, surah-break scheme).
+  /// Each page stays within one surah; [isGroupStart]/[groupLabel] mark the first verse.
+  static List<ScriptureVerse> buildSurahBreakPageVerses(
+      int page, List<ScriptureChapter> allSurahs) {
+    final surahIdx = _surahIdxForBreakPage(page);
+    final pageWithinSurah = page - _surahBreakPageStart[surahIdx];
+    final verseStart = pageWithinSurah * versesPerPage;
+    final verseEnd =
+        (verseStart + versesPerPage - 1).clamp(0, _verseCounts[surahIdx] - 1);
+    final surah = allSurahs[surahIdx];
+    return [
+      for (int v = verseStart; v <= verseEnd; v++)
+        ScriptureVerse(
+          number: surah.verses[v].number,
+          original: surah.verses[v].original,
+          translation: surah.verses[v].translation,
+          transliteration: surah.verses[v].transliteration,
+          wordMeanings: '${surahIdx + 1}',
+          isGroupStart: v == verseStart,
+          groupLabel: v == verseStart ? surah.name : null,
+        ),
+    ];
+  }
+
+  // ── Legacy uniform-page helpers ─────────────────────────────────────────
 
   /// Slices [allSurahs] into up to [versesPerPage] verses for [page] (1-based).
   /// Sets [ScriptureVerse.isGroupStart] and [ScriptureVerse.groupLabel] at surah
