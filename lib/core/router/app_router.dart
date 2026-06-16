@@ -100,7 +100,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile-setup',
-        builder: (context, state) => const ProfileSetupScreen(),
+        builder: (context, state) {
+          final extra = state.extra is Map ? state.extra as Map : null;
+          return ProfileSetupScreen(
+            isEditing: (extra?['edit'] as bool?) ?? false,
+          );
+        },
       ),
       GoRoute(
         path: '/history',

@@ -144,7 +144,7 @@ class ProfileScreen extends ConsumerWidget {
                             fg: fg,
                             muted: muted,
                             line: line,
-                            onTap: () => context.push('/profile-setup'),
+                            onTap: () => context.push('/profile-setup', extra: {'edit': true}),
                           ),
                           if (FirebaseAuth.instance.currentUser?.providerData
                               .any((p) => p.providerId == 'password') ?? false) ...[

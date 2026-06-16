@@ -8,7 +8,9 @@ import '../../providers/religion_provider.dart';
 import '../../providers/user_provider.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
-  const ProfileSetupScreen({super.key});
+  const ProfileSetupScreen({super.key, this.isEditing = false});
+
+  final bool isEditing;
 
   @override
   ConsumerState<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
@@ -26,12 +28,21 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   @override
   void initState() {
     super.initState();
-    final displayName = FirebaseAuth.instance.currentUser?.displayName ?? '';
-    if (displayName.isNotEmpty) {
-      final parts = displayName.trim().split(' ');
-      _firstNameController.text = parts.first;
-      if (parts.length > 1) {
-        _lastNameController.text = parts.sublist(1).join(' ');
+    if (widget.isEditing) {
+      final user = ref.read(userProvider).user;
+      if (user != null) {
+        _firstNameController.text = user.firstName;
+        _lastNameController.text = user.lastName;
+        _selectedAge = user.age;
+      }
+    } else {
+      final displayName = FirebaseAuth.instance.currentUser?.displayName ?? '';
+      if (displayName.isNotEmpty) {
+        final parts = displayName.trim().split(' ');
+        _firstNameController.text = parts.first;
+        if (parts.length > 1) {
+          _lastNameController.text = parts.sublist(1).join(' ');
+        }
       }
     }
     _ageScrollCtrl = FixedExtentScrollController(initialItem: _selectedAge - 13);
@@ -55,19 +66,28 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-      final photoUrl = FirebaseAuth.instance.currentUser?.photoURL;
+      if (widget.isEditing) {
+        await ref.read(userProvider.notifier).updateUser(
+              firstName: _firstNameController.text.trim(),
+              lastName: _lastNameController.text.trim(),
+              age: _selectedAge,
+            );
+        if (mounted) Navigator.of(context).pop();
+      } else {
+        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final photoUrl = FirebaseAuth.instance.currentUser?.photoURL;
 
-      await ref.read(userProvider.notifier).createUser(
-            uid: uid,
-            firstName: _firstNameController.text.trim(),
-            lastName: _lastNameController.text.trim(),
-            age: _selectedAge,
-            photoUrl: photoUrl,
-          );
+        await ref.read(userProvider.notifier).createUser(
+              uid: uid,
+              firstName: _firstNameController.text.trim(),
+              lastName: _lastNameController.text.trim(),
+              age: _selectedAge,
+              photoUrl: photoUrl,
+            );
 
-      await ref.read(religionProvider.notifier).completeSignIn();
-      if (mounted) context.go('/home');
+        await ref.read(religionProvider.notifier).completeSignIn();
+        if (mounted) context.go('/home');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -101,7 +121,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.go('/sign-in'),
+                    onTap: () => widget.isEditing
+                        ? Navigator.of(context).pop()
+                        : context.go('/sign-in'),
                     child: Container(
                       width: 36,
                       height: 36,
@@ -117,7 +139,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     ),
                   ),
                   Text(
-                    'PROFILE · SETUP',
+                    widget.isEditing ? 'EDIT DETAILS' : 'PROFILE · SETUP',
                     style: GoogleFonts.jetBrainsMono(
                       color: muted,
                       fontSize: 10,
@@ -129,7 +151,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Tell us about\nyourself.',
+                widget.isEditing
+                    ? 'Update your\ndetails.'
+                    : 'Tell us about\nyourself.',
                 style: GoogleFonts.cormorantGaramond(
                   color: fg,
                   fontSize: 38,
@@ -141,7 +165,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'So we can greet you properly.',
+                widget.isEditing
+                    ? 'Changes will reflect throughout the app.'
+                    : 'So we can greet you properly.',
                 style: GoogleFonts.inter(
                   color: muted,
                   fontSize: 14,
@@ -285,7 +311,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         )
                       : Text(
-                          'Continue',
+                          widget.isEditing ? 'Save Changes' : 'Continue',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
