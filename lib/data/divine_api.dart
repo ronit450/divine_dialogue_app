@@ -125,6 +125,20 @@ class DivineApi {
       buffer.clear();
       if (start < raw.length) buffer.write(raw.substring(start));
     }
+
+    // Some servers close the connection without a final \n\n after the last
+    // event. Process whatever remains so we never silently drop `done`.
+    final tail = buffer.toString().trim();
+    if (tail.startsWith('data: ')) {
+      final jsonStr = tail.substring(6).trim();
+      if (jsonStr.isNotEmpty) {
+        try {
+          final j = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final event = _parseEvent(j);
+          if (event != null) yield event;
+        } catch (_) {}
+      }
+    }
   }
 
   ApiStreamEvent? _parseEvent(Map<String, dynamic> j) {

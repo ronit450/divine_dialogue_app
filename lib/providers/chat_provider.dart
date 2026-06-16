@@ -227,6 +227,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final answerBuffer = StringBuffer();
       List<Citation> citations = [];
       List<dynamic> newContext = [];
+      var receivedDone = false;
       var lastRender = DateTime.now();
       // Track when each phase first became visible to enforce minimum display
       // durations. Cloud Functions buffer all SSE events before flushing, so
@@ -317,6 +318,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             }
           }
         } else if (event is ApiStreamDone) {
+          receivedDone = true;
           answerBuffer
             ..clear()
             ..write(event.answer);
@@ -351,7 +353,10 @@ final aiMsg = ChatMessage(
         hasToolCall: false,
         statusMessage: '',
         streamingPassages: const [],
-        conversationContext: newContext,
+        // Only overwrite context when the server sent a `done` event.
+        // If the stream ended without one (e.g. cancelled), preserve the
+        // existing context so the next message still has conversation history.
+        conversationContext: receivedDone ? newContext : state.conversationContext,
       );
       await ChatRepository.instance.saveSession(withAi);
       _ref.read(historyProvider.notifier).load();
