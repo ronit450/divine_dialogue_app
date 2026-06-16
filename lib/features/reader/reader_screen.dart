@@ -46,6 +46,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _showTranslation = true;
   bool _showTranslit = true;
   bool _quranPageMode = false; // true = reading-plan paged mode; false = surah mode
+  bool _browseMode = false; // true = opened via "Browse", ignore plan UI entirely
   bool _dismissedEndCard = false;
   bool _waitingForDownload = false;
   bool _searching = false;
@@ -59,6 +60,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void initState() {
     super.initState();
+    _browseMode = widget.hidePlanBanner;
     _loadPrefs();
     _meta = ScriptureTextMeta.forTextId(widget.textId);
     if (_meta == null) {
@@ -100,7 +102,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void dispose() {
     final plan = ref.read(readingPlanProvider).planForText(widget.textId);
-    if (plan != null && !_loading) {
+    if (plan != null && !_loading && !_browseMode) {
       ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, _currentChapter);
     }
     _scrollCtrl.dispose();
@@ -154,7 +156,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (_meta!.type == ScriptureTextType.quran) {
       _chapters = await _repo.loadChapters(widget.textId);
       final plan = ref.read(readingPlanProvider).planForText(widget.textId);
-      _quranPageMode = plan != null;
+      _quranPageMode = plan != null && !_browseMode;
       final raw = widget.initialChapter ?? saved.$1;
       if (_quranPageMode) {
         _currentChapter = raw.clamp(1, QuranPageMapper.totalSurahBreakPages);
@@ -236,7 +238,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
     await ref.read(scripturePositionProvider.notifier).savePosition(widget.textId, num, 1);
     final plan = ref.read(readingPlanProvider).planForText(widget.textId);
-    if (plan != null) {
+    if (plan != null && !_browseMode) {
       await ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, num);
     }
     if (mounted) {
@@ -422,7 +424,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       if ((prev?.isLoading ?? true) && !next.isLoading &&
           mounted && _meta?.type == ScriptureTextType.quran && !_loading) {
         final hasPlan = next.planForText(widget.textId) != null;
-        if (hasPlan != _quranPageMode) {
+        if (hasPlan != _quranPageMode && !_browseMode) {
           _quranPageMode = hasPlan;
           final target = hasPlan
               ? QuranPageMapper.surahToSurahBreakPage(_currentChapter.clamp(1, 114))
@@ -442,6 +444,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     final plan = ref.watch(readingPlanProvider).planForText(widget.textId);
     final showEndCard = plan != null &&
+        !_browseMode &&
         !plan.todayDone &&
         !_dismissedEndCard &&
         _reachedBottom &&
@@ -569,7 +572,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
             Divider(height: 1, color: line),
-            if (plan != null && !_loading && !widget.hidePlanBanner)
+            if (plan != null && !_loading && !widget.hidePlanBanner && !_browseMode)
               _TodayBanner(plan: plan, accent: accent, fg: fg, muted: muted),
             Expanded(
               child: _loading
