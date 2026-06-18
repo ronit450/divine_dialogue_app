@@ -24,7 +24,7 @@ git push origin main
 
 # --- Build ---
 echo "==> Building release APK ($NEW_VERSION)..."
-flutter build apk --release
+flutter build apk --release --dart-define-from-file=.env
 
 # --- Distribute ---
 echo "==> Uploading to Firebase App Distribution..."

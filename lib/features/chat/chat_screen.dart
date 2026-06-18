@@ -292,6 +292,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           citations: chatState.streamingPassages,
                           preamble: chatState.streamingPreamble,
                           hasToolCall: chatState.hasToolCall,
+                          isUnanswered: chatState.isUnanswered,
                         );
                         return _AgentBubble(
                           message: inflight,
@@ -702,6 +703,33 @@ class _AgentBubble extends StatelessWidget {
                                 color: muted.withValues(alpha: 0.5),
                                 fontSize: 11,
                                 fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // Layer 4 — Unanswered note (backend searched but found nothing)
+                      if (message.isUnanswered && !isStreaming) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Icon(Icons.info_outline_rounded,
+                                  size: 12, color: muted),
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                "We couldn't find a direct answer — our team has been notified and will look into this.",
+                                style: GoogleFonts.inter(
+                                  color: muted,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                  height: 1.4,
+                                ),
                               ),
                             ),
                           ],
@@ -1863,16 +1891,22 @@ class _VoiceWaveform extends StatefulWidget {
   State<_VoiceWaveform> createState() => _VoiceWaveformState();
 }
 
-class _VoiceWaveformState extends State<_VoiceWaveform> {
-  static const _barCount = 32;
-  final List<double> _bars = List.filled(_barCount, 0.0);
+class _VoiceWaveformState extends State<_VoiceWaveform>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
   StreamSubscription<Amplitude>? _ampSub;
   StreamSubscription<int>? _timerSub;
   int _seconds = 0;
+  double _amplitude = 0.0;
+  double _smoothed = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
     _ampSub = widget.amplitudeStream.listen(_onAmplitude);
     _timerSub = Stream.periodic(const Duration(seconds: 1), (i) => i + 1)
         .listen((s) {
@@ -1882,19 +1916,18 @@ class _VoiceWaveformState extends State<_VoiceWaveform> {
 
   @override
   void dispose() {
+    _animCtrl.dispose();
     _ampSub?.cancel();
     _timerSub?.cancel();
     super.dispose();
   }
 
   void _onAmplitude(Amplitude amp) {
-    final normalized = ((amp.current + 60) / 60).clamp(0.0, 1.0);
-    if (mounted) {
-      setState(() {
-        _bars.removeAt(0);
-        _bars.add(normalized);
-      });
-    }
+    if (!mounted) return;
+    final raw = amp.current.isFinite ? amp.current : -80.0;
+    // Gate at -45 dBFS: ambient noise (typically -55 to -65 dBFS) maps to 0.
+    // Speech (-30 to 0 dBFS) maps to 0.33..1.0.
+    _amplitude = ((raw + 45) / 45).clamp(0.0, 1.0);
   }
 
   String get _timeLabel {
@@ -1922,10 +1955,19 @@ class _VoiceWaveformState extends State<_VoiceWaveform> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: CustomPaint(
-              painter:
-                  _WaveformPainter(bars: List.of(_bars), color: widget.accent),
-              size: const Size(double.infinity, 28),
+            child: AnimatedBuilder(
+              animation: _animCtrl,
+              builder: (_, _) {
+                _smoothed += (_amplitude - _smoothed) * 0.25;
+                return CustomPaint(
+                  painter: _WaveformPainter(
+                    t: _animCtrl.value,
+                    amplitude: _smoothed,
+                    color: widget.accent,
+                  ),
+                  size: const Size(double.infinity, 36),
+                );
+              },
             ),
           ),
         ],
@@ -2031,36 +2073,62 @@ class _PressButtonState extends State<_PressButton>
 // ─── Waveform Painter ────────────────────────────────────────────────────────
 
 class _WaveformPainter extends CustomPainter {
-  const _WaveformPainter({required this.bars, required this.color});
+  const _WaveformPainter({
+    required this.t,
+    required this.amplitude,
+    required this.color,
+  });
 
-  final List<double> bars;
+  final double t;
+  final double amplitude;
   final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const barW = 2.0;
-    const gap = 2.5;
+    const barCount = 30;
+    const barW = 3.0;
+    const gap = 2.0;
     const step = barW + gap;
-    final minH = size.height * 0.12;
-    final maxH = size.height;
+    const tau = 2 * pi;
+
+    final totalW = barCount * step - gap;
+    var x = ((size.width - totalW) / 2).clamp(0.0, size.width);
     final paint = Paint()..strokeCap = StrokeCap.round;
 
-    final totalW = bars.length * step - gap;
-    var x = (size.width - totalW) / 2;
+    for (int i = 0; i < barCount; i++) {
+      final frac = i / (barCount - 1);
 
-    for (final bar in bars) {
-      final h = minH + bar * (maxH - minH);
+      // Two travelling sine waves in opposite directions for visual richness.
+      final w1 = sin(frac * pi * 3.0 + t * tau * 2.5);
+      final w2 = sin(frac * pi * 5.0 - t * tau * 1.8);
+      final wave = (w1 * 0.6 + w2 * 0.4).clamp(-1.0, 1.0);
+      final wavePos = wave * 0.5 + 0.5; // 0..1
+
+      // Sine envelope: tall at center, tapers to short at edges.
+      final envelope = sin(frac * pi);
+
+      final idleH = size.height * 0.10;
+      final speechH = size.height * amplitude * envelope * wavePos * 0.88;
+      final h = (idleH + speechH).clamp(size.height * 0.08, size.height);
+
       final top = (size.height - h) / 2;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, top, barW, h),
-        const Radius.circular(1),
-      );
-      paint.color = color.withValues(alpha: 0.25 + bar * 0.75);
-      canvas.drawRRect(rect, paint);
+      if (x + barW > 0 && x < size.width) {
+        paint.color = color.withValues(
+          alpha: (0.35 + amplitude * envelope * 0.65).clamp(0.0, 1.0),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, top, barW, h),
+            const Radius.circular(2),
+          ),
+          paint,
+        );
+      }
       x += step;
     }
   }
 
   @override
-  bool shouldRepaint(_WaveformPainter old) => true;
+  bool shouldRepaint(_WaveformPainter old) =>
+      old.t != t || old.amplitude != amplitude || old.color != color;
 }
