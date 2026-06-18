@@ -23,11 +23,14 @@ class ApiStreamChunk extends ApiStreamEvent {
 }
 
 class ApiStreamDone extends ApiStreamEvent {
-  ApiStreamDone({required this.answer, required this.citations, required this.context});
+  ApiStreamDone({required this.answer, required this.citations, required this.context, this.unanswered = false});
   final String answer;
   final List<Citation> citations;
   final List<dynamic> context;
+  final bool unanswered;
 }
+
+class ApiStreamUnanswered extends ApiStreamEvent {}
 
 class ApiStreamError extends ApiStreamEvent {
   ApiStreamError(this.message);
@@ -97,6 +100,9 @@ class DivineApi {
 
     if (sseResponse.statusCode != 200) {
       final body = await sseResponse.stream.bytesToString();
+      if (sseResponse.statusCode == 429) {
+        throw Exception('rate_limit');
+      }
       final detail = _tryParseDetail(body);
       throw Exception(detail ?? 'HTTP ${sseResponse.statusCode}: ${sseResponse.reasonPhrase}');
     }
@@ -162,7 +168,10 @@ class DivineApi {
           answer: answer,
           citations: passages,
           context: (j['context'] as List?) ?? [],
+          unanswered: (j['unanswered'] as bool?) ?? false,
         );
+      case 'unanswered':
+        return ApiStreamUnanswered();
       case 'error':
         return ApiStreamError(j['message'] as String? ?? 'Unknown error');
       default:

@@ -26,8 +26,11 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   }
 
   Future<void> load() async {
-    final sessions = await ChatRepository.instance.loadSessions();
-    state = state.copyWith(sessions: _sorted(sessions), isLoaded: true);
+    // Show cached data instantly, then silently refresh from Firebase
+    final cached = await ChatRepository.instance.loadSessionsCached();
+    state = state.copyWith(sessions: _sorted(cached), isLoaded: true);
+    final fresh = await ChatRepository.instance.loadSessions();
+    state = state.copyWith(sessions: _sorted(fresh), isLoaded: true);
   }
 
   void clearState() {

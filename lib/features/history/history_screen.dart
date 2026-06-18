@@ -209,9 +209,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
           if (!state.isLoaded)
-            const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            )
+            _SkeletonList(line: line, surface: surface)
           else if (state.sessions.isEmpty)
             SliverFillRemaining(child: _EmptyState(fg: fg, muted: muted))
           else if (filtered.isEmpty)
@@ -457,12 +455,32 @@ class _SessionTile extends StatelessWidget {
                           fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      '${session.messages.length} msg${session.messages.length == 1 ? '' : 's'} · ${_formatDate(session.updatedAt)}',
-                      style: GoogleFonts.jetBrainsMono(
-                          color: muted,
-                          fontSize: 10,
-                          letterSpacing: 0.3),
+                    Row(
+                      children: [
+                        Text(
+                          '${_formatDate(session.updatedAt)} • ${session.messages.length} msg${session.messages.length == 1 ? '' : 's'} • ',
+                          style: GoogleFonts.inter(
+                              color: muted,
+                              fontSize: 11),
+                        ),
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _religionName(session.religionId),
+                          style: GoogleFonts.inter(
+                            color: accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -610,13 +628,32 @@ class _SessionTile extends StatelessWidget {
       };
 
   String _formatDate(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    final d = DateUtils.dateOnly(dt);
+    if (d == today) {
+      final h = dt.hour;
+      final m = dt.minute.toString().padLeft(2, '0');
+      final period = h >= 12 ? 'PM' : 'AM';
+      final displayH = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      return '$displayH:$m $period';
+    }
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (d.isAfter(today.subtract(const Duration(days: 7)))) {
+      return days[dt.weekday - 1];
+    }
+    return '${months[dt.month - 1]} ${dt.day}';
   }
+
+  String _religionName(String id) => switch (id) {
+    'islam' => 'Islam',
+    'hinduism' => 'Hinduism',
+    'sikhism' => 'Sikhism',
+    'christianity' => 'Christianity',
+    _ => id,
+  };
 }
 
 class _MenuRow extends StatelessWidget {
@@ -637,6 +674,117 @@ class _MenuRow extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w500)),
       ],
+    );
+  }
+}
+
+class _SkeletonList extends StatefulWidget {
+  const _SkeletonList({required this.line, required this.surface});
+  final Color line;
+  final Color surface;
+
+  @override
+  State<_SkeletonList> createState() => _SkeletonListState();
+}
+
+class _SkeletonListState extends State<_SkeletonList>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (_, i) => AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, _) => Opacity(
+              opacity: 0.3 + _ctrl.value * 0.4,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _SkeletonTile(
+                  surface: widget.surface,
+                  line: widget.line,
+                ),
+              ),
+            ),
+          ),
+          childCount: 5,
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonTile extends StatelessWidget {
+  const _SkeletonTile({required this.surface, required this.line});
+  final Color surface;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shimmer = isDark
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.black.withValues(alpha: 0.06);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: line),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: shimmer),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 13,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: shimmer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 10,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: shimmer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

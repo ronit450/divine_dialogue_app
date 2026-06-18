@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../core/theme/app_colors.dart';
 
 class AppShell extends ConsumerStatefulWidget {
@@ -35,6 +36,8 @@ class _AppShellState extends ConsumerState<AppShell>
       value: 1.0,
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    // Pre-warm history in background so it's ready when user navigates there
+    ref.read(historyProvider);
   }
 
   @override

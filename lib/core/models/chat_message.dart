@@ -38,6 +38,7 @@ class ChatMessage {
     this.citations = const [],
     this.preamble = '',
     this.hasToolCall = false,
+    this.isUnanswered = false,
   });
 
   final String id;
@@ -47,6 +48,7 @@ class ChatMessage {
   final List<Citation> citations;
   final String preamble;
   final bool hasToolCall;
+  final bool isUnanswered;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -56,6 +58,7 @@ class ChatMessage {
     'citations': citations.map((c) => c.toJson()).toList(),
     'preamble': preamble,
     'hasToolCall': hasToolCall,
+    'isUnanswered': isUnanswered,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -70,6 +73,7 @@ class ChatMessage {
         .toList(),
     preamble: (json['preamble'] as String?) ?? '',
     hasToolCall: (json['hasToolCall'] as bool?) ?? false,
+    isUnanswered: (json['isUnanswered'] as bool?) ?? false,
   );
 }
 

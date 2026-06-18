@@ -492,6 +492,7 @@ class PlanDetailScreen extends ConsumerWidget {
           unitLabel: plan.unitLabel,
           estimatedMins: plan.estimatedMinutesPerDay,
         );
+        await NotificationService.instance.requestBatteryExemption();
       }
     }
   }

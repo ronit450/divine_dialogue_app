@@ -407,6 +407,9 @@ class _SetupSheetState extends ConsumerState<_SetupSheet> {
         unitLabel: plan.unitLabel,
         estimatedMins: plan.estimatedMinutesPerDay,
       );
+      // Ask Android to exempt the app from battery optimization so
+      // exact alarms fire reliably on OEM phones (Xiaomi, Samsung, etc.)
+      await NotificationService.instance.requestBatteryExemption();
     }
 
     if (mounted) Navigator.of(context).pop();

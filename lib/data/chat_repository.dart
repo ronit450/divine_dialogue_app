@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/chat_message.dart';
 
 class ChatRepository {
@@ -7,11 +10,24 @@ class ChatRepository {
   static final ChatRepository instance = ChatRepository._();
 
   final _db = FirebaseFirestore.instance;
+  static const _cacheKey = 'history_sessions_v1';
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   CollectionReference<Map<String, dynamic>> _conv(String uid) =>
       _db.collection('users').doc(uid).collection('conversations');
+
+  Future<List<ChatSession>> loadSessionsCached() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null) return [];
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      return list.map(ChatSession.fromJson).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   Future<List<ChatSession>> loadSessions() async {
     final uid = _uid;
@@ -20,7 +36,19 @@ class ChatRepository {
         .orderBy('updatedAt', descending: true)
         .limit(20)
         .get();
-    return snap.docs.map((d) => ChatSession.fromJson(d.data())).toList();
+    final sessions = snap.docs.map((d) => ChatSession.fromJson(d.data())).toList();
+    unawaited(_persistCache(sessions));
+    return sessions;
+  }
+
+  Future<void> _persistCache(List<ChatSession> sessions) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _cacheKey,
+        jsonEncode(sessions.map((s) => s.toJson()).toList()),
+      );
+    } catch (_) {}
   }
 
   Future<void> saveSession(ChatSession session) async {

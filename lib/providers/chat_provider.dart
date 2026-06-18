@@ -22,6 +22,7 @@ class ChatState {
     this.conversationContext = const [],
     this.error,
     this.pendingVerseContext,
+    this.isUnanswered = false,
   });
   final ChatSession? session;
   // True from the moment the user sends until the `done` event arrives.
@@ -37,6 +38,8 @@ class ChatState {
   final List<dynamic> conversationContext;
   final String? error;
   final VerseContext? pendingVerseContext;
+  // True when the backend searched but found no relevant answer.
+  final bool isUnanswered;
 
   /// True while *anything* is in-flight in the agent bubble — preamble,
   /// tool-call, or answer text. Used by screens to decide whether to render
@@ -56,6 +59,7 @@ class ChatState {
     String? error,
     VerseContext? pendingVerseContext,
     bool clearPendingVerse = false,
+    bool? isUnanswered,
   }) => ChatState(
     session: session ?? this.session,
     isTyping: isTyping ?? this.isTyping,
@@ -68,6 +72,7 @@ class ChatState {
     error: error,
     pendingVerseContext:
         clearPendingVerse ? null : (pendingVerseContext ?? this.pendingVerseContext),
+    isUnanswered: isUnanswered ?? this.isUnanswered,
   );
 }
 
@@ -96,6 +101,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       hasToolCall: false,
       streamingPassages: const [],
       clearPendingVerse: true,
+      isUnanswered: false,
     );
   }
 
@@ -209,6 +215,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       streamingPassages: const [],
       error: null,
       clearPendingVerse: true,
+      isUnanswered: false,
     );
     // Fire save concurrently — don't block stream start
     unawaited(ChatRepository.instance.saveSession(withUser));
@@ -317,6 +324,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
               state = state.copyWith(isTyping: false);
             }
           }
+        } else if (event is ApiStreamUnanswered) {
+          state = state.copyWith(isUnanswered: true);
         } else if (event is ApiStreamDone) {
           receivedDone = true;
           answerBuffer
@@ -324,6 +333,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             ..write(event.answer);
           citations = event.citations;
           newContext = event.context;
+          if (event.unanswered) state = state.copyWith(isUnanswered: true);
         } else if (event is ApiStreamError) {
           throw Exception(event.message);
         }
@@ -339,6 +349,7 @@ final aiMsg = ChatMessage(
         citations: citations,
         preamble: preambleBuffer.toString(),
         hasToolCall: state.hasToolCall,
+        isUnanswered: state.isUnanswered,
       );
 
       final withAi = withUser.copyWith(
@@ -353,6 +364,7 @@ final aiMsg = ChatMessage(
         hasToolCall: false,
         statusMessage: '',
         streamingPassages: const [],
+        isUnanswered: false,
         // Only overwrite context when the server sent a `done` event.
         // If the stream ended without one (e.g. cancelled), preserve the
         // existing context so the next message still has conversation history.
@@ -368,6 +380,7 @@ final aiMsg = ChatMessage(
         hasToolCall: false,
         statusMessage: '',
         streamingPassages: const [],
+        isUnanswered: false,
         error: _friendlyError(e),
       );
     }
@@ -375,6 +388,7 @@ final aiMsg = ChatMessage(
 
   static String _friendlyError(Object e) {
     final msg = e.toString().replaceFirst('Exception: ', '');
+    if (msg.contains('rate_limit')) return "You're sending messages too quickly — please wait a moment.";
     if (msg.contains('timed out')) return 'Request timed out. Please try again.';
     if (msg.contains('Network error')) return 'No connection. Please check your internet and try again.';
     if (msg.contains('HTTP 401') || msg.contains('HTTP 403')) return 'Session expired. Please restart the app.';

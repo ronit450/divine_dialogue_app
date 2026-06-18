@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -51,6 +52,17 @@ class NotificationService {
       return await impl?.requestNotificationsPermission() ?? true;
     }
     return true;
+  }
+
+  /// On Android, requests the system to exclude this app from battery
+  /// optimization so exact alarms fire reliably even when the screen is off.
+  /// No-op on iOS. Safe to call multiple times — skips if already exempt.
+  Future<void> requestBatteryExemption() async {
+    if (!Platform.isAndroid) return;
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    if (!status.isGranted) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
   }
 
   Future<void> schedulePlanReminder({
@@ -116,6 +128,30 @@ class NotificationService {
     } else {
       await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
     }
+  }
+
+  /// Shows a notification immediately (used by FcmService for foreground FCM messages).
+  Future<void> showImmediate({required String title, required String body}) async {
+    if (!_initialized) await init();
+    const androidDetails = AndroidNotificationDetails(
+      'divine_reading_reminders',
+      'Reading Reminders',
+      channelDescription: 'Daily reminders for your reading plan',
+      importance: Importance.high,
+      priority: Priority.defaultPriority,
+      icon: '@drawable/ic_notification',
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    await _plugin.show(
+      0,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+    );
   }
 
   Future<void> cancelPlanReminder(String planId) async {
