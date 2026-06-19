@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../data/chat_repository.dart';
 import '../data/divine_api.dart';
 import 'chat_provider.dart';
 import 'history_provider.dart';
@@ -33,6 +34,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._ref) : super(_stateFromCurrentUser());
 
   final Ref _ref;
+  DateTime? _lastPasswordResetAt;
 
   Future<void> signUpWithEmail(String email, String password) async {
     final result = await FirebaseAuth.instance.createUserWithEmailAndPassword(
@@ -44,6 +46,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _afterSignIn(User user) async {
+    DivineApi.instance.clearCache();
     await _ref.read(userProvider.notifier).loadUser(user.uid);
     final loadedUser = _ref.read(userProvider).user;
     final religionNotifier = _ref.read(religionProvider.notifier);
@@ -102,6 +105,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
+    if (_lastPasswordResetAt != null &&
+        DateTime.now().difference(_lastPasswordResetAt!) < const Duration(seconds: 60)) {
+      throw Exception('Please wait before requesting another reset.');
+    }
+    _lastPasswordResetAt = DateTime.now();
     await FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
   }
 
@@ -139,13 +147,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    DivineApi.instance.cancelCurrentRequest();
     _ref.read(chatProvider.notifier).clearSession();
     _ref.read(historyProvider.notifier).clearState();
     _ref.read(readingPlanProvider.notifier).clear();
     _ref.read(userProvider.notifier).clear();
     _ref.read(savedVersesProvider.notifier).clear();
     DivineApi.instance.clearCache();
+    unawaited(ChatRepository.instance.clearUserCache());
     await _ref.read(religionProvider.notifier).clearAuthState();
+    final isAnon = FirebaseAuth.instance.currentUser?.isAnonymous ?? false;
+    if (isAnon) {
+      try { await FirebaseAuth.instance.currentUser?.delete(); } catch (_) {}
+    }
     await FirebaseAuth.instance.signOut();
     await GoogleSignIn().signOut();
     state = const AuthState();

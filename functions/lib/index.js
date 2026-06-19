@@ -25,7 +25,10 @@ exports.sendReadingReminders = (0, scheduler_1.onSchedule)({
     const currentMinute = now.getUTCMinutes();
     // YYYY-MM-DD in UTC — used to gate one notification per plan per day.
     const today = now.toISOString().slice(0, 10);
-    const usersSnap = await db.collection('users').get();
+    // Requires index: users collection, fcmToken ASC (create in Firebase Console if missing)
+    const usersSnap = await db.collection('users')
+        .where('fcmToken', '!=', null)
+        .get();
     let sentCount = 0;
     await Promise.all(usersSnap.docs.map(async (userDoc) => {
         const userData = userDoc.data();

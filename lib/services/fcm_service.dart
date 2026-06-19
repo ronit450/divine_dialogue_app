@@ -7,6 +7,7 @@
 //   3. Add the three FcmService calls to main.dart (marked in NOTIFICATIONS.md)
 //   4. Deploy the Cloud Function in functions/
 
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -25,6 +26,7 @@ class FcmService {
   static final instance = FcmService._();
 
   final _fcm = FirebaseMessaging.instance;
+  StreamSubscription<String>? _tokenRefreshSub;
 
   /// Call once from main.dart AFTER Firebase.initializeApp() and AFTER
   /// NotificationService.init() has been called.
@@ -44,7 +46,7 @@ class FcmService {
     if (token != null) await _saveToken(token);
 
     // Keep token fresh — Firebase rotates it occasionally.
-    _fcm.onTokenRefresh.listen(_saveToken);
+    _tokenRefreshSub = _fcm.onTokenRefresh.listen(_saveToken);
 
     // Show a local heads-up notification when FCM message arrives in foreground
     // (system tray is suppressed while app is open by default).
@@ -83,6 +85,7 @@ class FcmService {
   /// Call before sign-out to unlink the token so the signed-out user no longer
   /// receives notifications on this device.
   Future<void> onSignOut() async {
+    await _tokenRefreshSub?.cancel();
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {

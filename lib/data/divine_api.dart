@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/models/chat_message.dart';
 
@@ -108,7 +109,9 @@ class DivineApi {
     }
 
     final buffer = StringBuffer();
-    await for (final chunk in sseResponse.stream.transform(utf8.decoder)) {
+    await for (final chunk in sseResponse.stream
+        .timeout(const Duration(minutes: 2), onTimeout: (sink) => sink.close())
+        .transform(utf8.decoder)) {
       buffer.write(chunk);
       final raw = buffer.toString();
 
@@ -125,7 +128,7 @@ class DivineApi {
           final j = jsonDecode(jsonStr) as Map<String, dynamic>;
           final event = _parseEvent(j);
           if (event != null) yield event;
-        } catch (_) {}
+        } catch (e) { debugPrint('SSE parse error: $e'); }
       }
 
       buffer.clear();
@@ -142,7 +145,7 @@ class DivineApi {
           final j = jsonDecode(jsonStr) as Map<String, dynamic>;
           final event = _parseEvent(j);
           if (event != null) yield event;
-        } catch (_) {}
+        } catch (e) { debugPrint('SSE parse error: $e'); }
       }
     }
   }

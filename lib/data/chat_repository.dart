@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/chat_message.dart';
 
@@ -10,7 +11,7 @@ class ChatRepository {
   static final ChatRepository instance = ChatRepository._();
 
   final _db = FirebaseFirestore.instance;
-  static const _cacheKey = 'history_sessions_v1';
+  String get _cacheKey => 'history_sessions_${_uid ?? 'anon'}_v1';
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -58,7 +59,11 @@ class ChatRepository {
     final toSave = session.messages.length > 200
         ? session.copyWith(messages: session.messages.sublist(session.messages.length - 200))
         : session;
-    await _conv(uid).doc(session.id).set(toSave.toJson());
+    try {
+      await _conv(uid).doc(session.id).set(toSave.toJson());
+    } catch (e) {
+      debugPrint('saveSession failed: $e');
+    }
   }
 
   Future<void> deleteSession(String sessionId) async {
@@ -80,6 +85,13 @@ class ChatRepository {
         'feedbackAt': FieldValue.serverTimestamp(),
         'feedbackMessageCount': messageCount,
       });
+    } catch (_) {}
+  }
+
+  Future<void> clearUserCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey);
     } catch (_) {}
   }
 
