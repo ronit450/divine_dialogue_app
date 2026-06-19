@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../providers/share_card_style_provider.dart';
+import '../../shared/widgets/share_card.dart';
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
 
@@ -112,6 +114,7 @@ class GuideMenuScreen extends StatelessWidget {
                       entries: [
                         _MenuEntry('09', 'Browse texts', 'Explore all texts in your tradition', () => openAt(8)),
                         _MenuEntry('10', 'Conversation history', 'Return to any past dialogue', () => openAt(9)),
+                        _MenuEntry('11', 'Share a verse', 'Send verses as text or styled image cards', () => openAt(10)),
                       ],
                       surface: surface,
                       line: line,
@@ -251,7 +254,7 @@ class _GuideTutorialFlowState extends State<GuideTutorialFlow> {
   late final PageController _ctrl;
   int _page = 0;
 
-  static const _count = 10;
+  static const _count = 11;
 
   static const _titles = [
     'Ask your tradition',
@@ -264,6 +267,7 @@ class _GuideTutorialFlowState extends State<GuideTutorialFlow> {
     'Reading plans',
     'Browse texts',
     'Conversation history',
+    'Share a verse',
   ];
 
   static const _captions = [
@@ -277,6 +281,7 @@ class _GuideTutorialFlowState extends State<GuideTutorialFlow> {
     'Set a daily reading goal and enable reminders.\nThe app tracks your streak automatically.',
     'The Library tab shows all sacred texts for\nyour selected tradition. Tap any to start reading.',
     'All your conversations are saved. Access them\nfrom the chat drawer or the History screen.',
+    'Send any verse as plain text, or as a styled image card.\nPick the card look in Settings → Appearance.',
   ];
 
   @override
@@ -492,6 +497,8 @@ class _GuidePage extends StatelessWidget {
         return _DemoLibrary(isDark: isDark, fg: fg, muted: muted, line: line);
       case 9:
         return _DemoHistory(isDark: isDark, fg: fg, muted: muted, line: line);
+      case 10:
+        return _DemoShareVerse(isDark: isDark, fg: fg, muted: muted, line: line);
       default:
         return const SizedBox.shrink();
     }
@@ -1639,6 +1646,222 @@ class _DemoHistoryState extends State<_DemoHistory> {
             );
           }),
         ),
+      ),
+    );
+  }
+}
+
+// ── Demo: Share a verse ───────────────────────────────────────────────────────
+
+class _DemoShareVerse extends StatefulWidget {
+  const _DemoShareVerse(
+      {required this.isDark,
+      required this.fg,
+      required this.muted,
+      required this.line});
+  final bool isDark;
+  final Color fg, muted, line;
+  @override
+  State<_DemoShareVerse> createState() => _DemoShareVerseState();
+}
+
+class _DemoShareVerseState extends State<_DemoShareVerse> {
+  int _phase = 0;
+  Timer? _t;
+  static const _phaseDelays = [1400, 1700, 1700, 1800];
+  static const _templates = [
+    ShareCardTemplate.midnight,
+    ShareCardTemplate.paper,
+    ShareCardTemplate.garden,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  void _schedule() {
+    _t = Timer(Duration(milliseconds: _phaseDelays[_phase]), () {
+      if (!mounted) return;
+      setState(() => _phase = (_phase + 1) % 4);
+      _schedule();
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sheetUp = _phase >= 1;
+    final tplIndex = _phase > 0 ? _phase - 1 : 0;
+    return Stack(
+      children: [
+        AnimatedOpacity(
+          opacity: sheetUp ? 0.45 : 1.0,
+          duration: const Duration(milliseconds: 350),
+          child: _DemoVerseBackground(
+              fg: widget.fg,
+              muted: widget.muted,
+              line: widget.line,
+              isDark: widget.isDark),
+        ),
+        Positioned(
+          bottom: 14,
+          right: 14,
+          child: AnimatedOpacity(
+            opacity: sheetUp ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 250),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.islamGreen,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.ios_share_rounded,
+                      size: 11, color: Colors.white),
+                  const SizedBox(width: 5),
+                  Text('Share',
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        AnimatedSlide(
+          offset: sheetUp ? Offset.zero : const Offset(0, 1.1),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              decoration: BoxDecoration(
+                color: widget.isDark ? AppColors.nightBg : AppColors.boneBg,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border(top: BorderSide(color: widget.line)),
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 30,
+                    height: 3.5,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: widget.muted.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    child: ClipRRect(
+                      key: ValueKey(tplIndex),
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 110,
+                        height: 138,
+                        child: FittedBox(
+                          fit: BoxFit.fill,
+                          child: SizedBox(
+                            width: ShareCard.cardWidth,
+                            height: ShareCard.cardHeight,
+                            child: ShareCard(
+                              text: 'ਜਨਮ ਮਰਣ ਭਉ ਕਟਿਆ',
+                              reference: 'BGV · 1',
+                              religionId: 'sikhism',
+                              template: _templates[tplIndex],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(3, (i) {
+                      final active = i == tplIndex;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: active ? 14 : 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: active
+                              ? AppColors.islamGreen
+                              : widget.muted.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DemoVerseBackground extends StatelessWidget {
+  const _DemoVerseBackground(
+      {required this.fg,
+      required this.muted,
+      required this.line,
+      required this.isDark});
+  final Color fg, muted, line;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.sikhNavy.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              'BGV · 1',
+              style: GoogleFonts.jetBrainsMono(
+                  color: AppColors.sikhNavy,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'ਜਨਮ ਮਰਣ ਭਉ ਕਟਿਆ ਸੰਸਾ ਰੋਗੁ ਵਿਜੋਗੁ ਮਿਟਾਇਆ।',
+            style: GoogleFonts.notoSerifGurmukhi(
+                color: fg, fontSize: 13, height: 1.55),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'He destroyed the fear of transmigration and decimated the malady of doubt.',
+            style:
+                GoogleFonts.inter(color: muted, fontSize: 11, height: 1.55),
+          ),
+        ],
       ),
     );
   }

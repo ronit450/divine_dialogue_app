@@ -292,7 +292,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
   void _exportSession(ChatSession session) {
     final buf = StringBuffer();
-    buf.writeln('=== Divine Dialogue ===');
+    buf.writeln('=== Divine Chat ===');
     buf.writeln('Title: ${session.title}');
     buf.writeln('Religion: ${session.religionId}');
     buf.writeln(

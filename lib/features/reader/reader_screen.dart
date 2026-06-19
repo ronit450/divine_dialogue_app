@@ -15,6 +15,7 @@ import '../../core/models/reading_plan.dart';
 import '../../providers/download_provider.dart';
 import '../../core/models/saved_verse.dart';
 import '../../providers/saved_verses_provider.dart';
+import '../../providers/share_card_style_provider.dart';
 import '../../services/share_service.dart';
 import 'toc_sheet.dart' show showTocSheet, showPagedTocSheet;
 
@@ -819,6 +820,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       reference: _verseReference(verse),
       religionId: _meta!.religionId,
       translation: verse.original != null ? verse.translation : null,
+      template: ref.read(shareCardStyleProvider),
     );
   }
 

@@ -96,7 +96,7 @@ class ReportRepository {
 
     return '''
 <h2 style="margin:0 0 16px;font-family:sans-serif">
-  Divine Dialogue — ${_categoryLabel(category)}
+  Divine Chat — ${_categoryLabel(category)}
 </h2>
 <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse">
   <tr><td style="padding:4px 12px 4px 0;color:#888">Ref</td><td>DD-${id.substring(0, 8).toUpperCase()}</td></tr>

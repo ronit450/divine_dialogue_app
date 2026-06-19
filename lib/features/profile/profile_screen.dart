@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/religion_provider.dart';
+import '../../providers/share_card_style_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_scale_provider.dart';
 import '../../providers/user_provider.dart';
@@ -11,6 +12,7 @@ import '../../providers/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/models/religion.dart';
 import '../../shared/widgets/religion_glyph.dart';
+import '../../shared/widgets/share_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -19,6 +21,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final religionState = ref.watch(religionProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final cardTemplate = ref.watch(shareCardStyleProvider);
     final userState = ref.watch(userProvider);
     final authState = ref.watch(authProvider);
     final religion = religionState.selectedReligion;
@@ -300,6 +303,27 @@ class ProfileScreen extends ConsumerWidget {
                               );
                             },
                           ),
+                          Divider(height: 1, color: line),
+                          _ActionRow(
+                            icon: Icons.style_rounded,
+                            label: 'Share card style',
+                            value: cardTemplate.displayName,
+                            fg: fg,
+                            muted: muted,
+                            line: line,
+                            onTap: () => _showCardStylePicker(
+                              context: context,
+                              ref: ref,
+                              religionId: religion?.id ?? 'islam',
+                              selected: cardTemplate,
+                              accent: accent,
+                              fg: fg,
+                              muted: muted,
+                              line: line,
+                              surface: surface,
+                              isDark: isDark,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -435,10 +459,12 @@ class _ActionRow extends StatelessWidget {
     required this.muted,
     required this.line,
     required this.onTap,
+    this.value,
   });
 
   final IconData icon;
   final String label;
+  final String? value;
   final Color fg;
   final Color muted;
   final Color line;
@@ -458,6 +484,10 @@ class _ActionRow extends StatelessWidget {
             Expanded(
               child: Text(label, style: GoogleFonts.inter(color: fg, fontSize: 14)),
             ),
+            if (value != null) ...[
+              Text(value!, style: GoogleFonts.inter(color: muted, fontSize: 13)),
+              const SizedBox(width: 4),
+            ],
             Icon(Icons.chevron_right_rounded, color: muted, size: 18),
           ],
         ),
@@ -619,6 +649,180 @@ void _showTextPicker({
     ),
   );
 }
+
+void _showCardStylePicker({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String religionId,
+  required ShareCardTemplate selected,
+  required Color accent,
+  required Color fg,
+  required Color muted,
+  required Color line,
+  required Color surface,
+  required bool isDark,
+}) {
+  final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: bg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) {
+      var current = selected;
+      return StatefulBuilder(
+        builder: (ctx, setSheetState) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: muted.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Card style',
+                style: GoogleFonts.cormorantGaramond(
+                  color: fg,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w500,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Choose how shared verses look.',
+                style: GoogleFonts.inter(color: muted, fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              ...ShareCardTemplate.values.map((tpl) {
+                final on = tpl == current;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GestureDetector(
+                    onTap: () {
+                      setSheetState(() => current = tpl);
+                      ref.read(shareCardStyleProvider.notifier).setTemplate(tpl);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: on ? accent : line,
+                          width: on ? 1.5 : 1,
+                        ),
+                        boxShadow: on
+                            ? [
+                                BoxShadow(
+                                    color: accent.withValues(alpha: 0.15),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6))
+                              ]
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius:
+                                const BorderRadius.horizontal(left: Radius.circular(15)),
+                            child: SizedBox(
+                              width: 72,
+                              height: 90,
+                              child: FittedBox(
+                                fit: BoxFit.fill,
+                                child: SizedBox(
+                                  width: ShareCard.cardWidth,
+                                  height: ShareCard.cardHeight,
+                                  child: ShareCard(
+                                    text: _sampleVerse(religionId),
+                                    reference: _sampleRef(religionId),
+                                    religionId: religionId,
+                                    template: tpl,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tpl.displayName,
+                                  style: GoogleFonts.cormorantGaramond(
+                                    color: fg,
+                                    fontSize: 20,
+                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  tpl.subtitle,
+                                  style: GoogleFonts.inter(
+                                      color: muted, fontSize: 12, height: 1.4),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 22,
+                            height: 22,
+                            margin: const EdgeInsets.only(right: 14),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: on ? accent : Colors.transparent,
+                              border: Border.all(
+                                  color: on ? accent : muted, width: 1.5),
+                            ),
+                            child: on
+                                ? const Icon(Icons.check_rounded,
+                                    size: 13, color: Colors.white)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  },
+  );
+}
+
+String _sampleVerse(String religionId) => switch (religionId) {
+      'islam' => 'فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا',
+      'hinduism' => 'कर्मण्येवाधिकारस्ते',
+      'sikhism' => 'ਵਾਹਿਗੁਰੂ ਜੀ ਕਾ ਖਾਲਸਾ',
+      _ => 'Be still, and know that I am God.',
+    };
+
+String _sampleRef(String religionId) => switch (religionId) {
+      'islam' => "Qur'ān · 94:5",
+      'hinduism' => 'Bhagavad Gītā · 2:47',
+      'sikhism' => 'BGV · 1',
+      _ => 'Psalm · 46:10',
+    };
 
 class _TextPickerSheet extends ConsumerWidget {
   const _TextPickerSheet({

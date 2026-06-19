@@ -71,7 +71,7 @@ class FcmService {
     final body = message.notification?.body;
     if (title == null && body == null) return;
     await NotificationService.instance.showImmediate(
-      title: title ?? 'Divine Dialogue',
+      title: title ?? 'Divine Chat',
       body: body ?? '',
     );
   }

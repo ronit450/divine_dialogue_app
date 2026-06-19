@@ -10,7 +10,7 @@ const _kDevs = [
     monogram: 'RK',
     tint: AppColors.hinduOrange,
     short: 'Building dialogue with the divine.',
-    long: 'The mind behind Divine Dialogue. Ronit built this app out of a '
+    long: 'The mind behind Divine Chat. Ronit built this app out of a '
         'deep curiosity about how technology can bring people closer to their '
         'spiritual roots — without diluting the tradition. He reads everything '
         'users send and cares deeply about getting the answers right.',
@@ -26,7 +26,7 @@ const _kDevs = [
     monogram: 'FA',
     tint: AppColors.islamGreen,
     short: 'Co-building this with care.',
-    long: 'Faraz co-founded Divine Dialogue with a focus on making the '
+    long: 'Faraz co-founded Divine Chat with a focus on making the '
         'Islamic tradition feel alive and accessible through honest, '
         'well-sourced answers. He brings both engineering discipline and a '
         'genuine reverence for the texts to everything he works on.',
@@ -120,7 +120,7 @@ class _DevelopersScreenState extends State<DevelopersScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 4, bottom: 18),
                       child: Text(
-                        'Divine Dialogue is built by two people. Tap a card to '
+                        'Divine Chat is built by two people. Tap a card to '
                         'learn more or reach out — we read everything.',
                         style: GoogleFonts.inter(
                           color: muted, fontSize: 13, height: 1.55,

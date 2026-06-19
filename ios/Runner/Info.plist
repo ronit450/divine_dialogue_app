@@ -5,11 +5,11 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Divine Dialogue needs microphone access to accept voice questions.</string>
+	<string>Divine Chat needs microphone access to accept voice questions.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Divine Dialogue</string>
+	<string>Divine Chat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

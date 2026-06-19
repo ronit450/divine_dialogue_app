@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/theme/app_colors.dart';
+import '../providers/share_card_style_provider.dart';
 import '../shared/widgets/share_card.dart';
 
 Future<void> showShareSheet(
@@ -16,6 +17,7 @@ Future<void> showShareSheet(
   required String reference,
   required String religionId,
   String? translation,
+  ShareCardTemplate template = ShareCardTemplate.midnight,
 }) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final bg = isDark ? AppColors.nightBg : AppColors.boneBg;
@@ -49,7 +51,27 @@ Future<void> showShareSheet(
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Share verse',
+                    style: GoogleFonts.cormorantGaramond(
+                      color: fg,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  Text(
+                    template.displayName.toUpperCase(),
+                    style: GoogleFonts.jetBrainsMono(
+                        color: muted, fontSize: 10, letterSpacing: 1.5),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               Flexible(
                 child: SingleChildScrollView(
                   child: RepaintBoundary(
@@ -59,6 +81,7 @@ Future<void> showShareSheet(
                       reference: reference,
                       religionId: religionId,
                       translation: translation,
+                      template: template,
                     ),
                   ),
                 ),
@@ -75,7 +98,7 @@ Future<void> showShareSheet(
                       onTap: () {
                         Navigator.pop(ctx);
                         Share.share(
-                            '$text\n\n— $reference\n\nShared via Divine Dialogue');
+                            '$text\n\n— $reference\n\nShared via Divine Chat');
                       },
                     ),
                   ),
@@ -116,7 +139,7 @@ Future<void> _captureAndShare(GlobalKey key, String filename) async {
     final safe = filename.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     final file = await File('${dir.path}/$safe.png').writeAsBytes(bytes);
     await Share.shareXFiles([XFile(file.path)],
-        text: 'Shared via Divine Dialogue');
+        text: 'Shared via Divine Chat');
   } catch (_) {}
 }
 

@@ -16,6 +16,7 @@ import '../../services/assembly_ai_service.dart';
 import '../../core/models/saved_verse.dart';
 import '../../core/models/scripture.dart';
 import '../../providers/saved_verses_provider.dart';
+import '../../providers/share_card_style_provider.dart';
 import '../../services/share_service.dart';
 import 'voice/voice_recorder.dart';
 
@@ -1137,6 +1138,7 @@ class _PassageCard extends ConsumerWidget {
                         ? (ScriptureTextMeta.forTextId(textId!)?.religionId ?? '')
                         : '',
                     translation: hasOriginal ? citation.translation : null,
+                    template: ref.read(shareCardStyleProvider),
                   ),
                   child: Icon(Icons.ios_share_rounded, size: 14, color: muted),
                 ),
