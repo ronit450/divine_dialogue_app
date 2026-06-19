@@ -78,6 +78,7 @@ class DivineApi {
     required String religion,
     required List<dynamic> context,
     List<String> books = const [],
+    String? userUuid,
   }) async* {
     final request = http.Request('POST', Uri.parse('$_baseUrl/chat/stream'));
     final headers = await _headers();
@@ -87,6 +88,7 @@ class DivineApi {
       'religion': religion,
       'context': context,
       'books': books,
+      'user_uuid': userUuid,
     });
 
     final http.StreamedResponse sseResponse;

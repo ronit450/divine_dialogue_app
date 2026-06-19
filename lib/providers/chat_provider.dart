@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../core/models/chat_message.dart';
 import '../data/chat_repository.dart';
 import '../data/divine_api.dart';
+import 'auth_provider.dart';
 import 'history_provider.dart';
 import 'religion_provider.dart';
 
@@ -253,6 +254,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         religion: current.religionId,
         context: cappedContext,
         books: _booksForText(current.textId),
+        userUuid: _ref.read(authProvider).uid,
       )) {
         if (event is ApiStreamStatus) {
           final msg = event.message;

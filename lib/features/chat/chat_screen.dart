@@ -906,6 +906,9 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
   Widget build(BuildContext context) {
     const doneColor = Color(0xFF2E9D5C);
     final bookName = _bookDisplayName(widget.textId);
+    final doneLabel = widget.statusMessage.isNotEmpty
+        ? widget.statusMessage.replaceAll(RegExp(r'[…\.]+\s*$'), '').trim()
+        : 'Searched $bookName';
 
     if (!widget.isRunning) {
       // ── Done pill ─────────────────────────────────────────────
@@ -935,7 +938,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
                   style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
                   children: [
                     TextSpan(
-                      text: 'Searched $bookName',
+                      text: doneLabel,
                       style: TextStyle(color: doneColor),
                     ),
                     if (widget.passageCount > 0) ...[
