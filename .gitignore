@@ -1,6 +1,10 @@
 # Environment
 .env
 
+# Node
+node_modules/
+functions/node_modules/
+
 # Miscellaneous
 *.class
 *.log

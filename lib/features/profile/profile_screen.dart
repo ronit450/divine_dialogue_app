@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../providers/religion_provider.dart';
 import '../../providers/share_card_style_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -381,7 +382,13 @@ class ProfileScreen extends ConsumerWidget {
                       isDark: isDark,
                       child: Column(
                         children: [
-                          _InfoRow(label: 'Version', value: '1.0.0', fg: fg, muted: muted),
+                          FutureBuilder<PackageInfo>(
+                            future: PackageInfo.fromPlatform(),
+                            builder: (context, snapshot) {
+                              final version = snapshot.data?.version ?? '1.0.0';
+                              return _InfoRow(label: 'Version', value: version, fg: fg, muted: muted);
+                            },
+                          ),
                           Divider(height: 1, color: line),
                           _InfoRow(
                             label: 'Traditions',
