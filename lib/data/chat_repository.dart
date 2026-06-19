@@ -67,6 +67,22 @@ class ChatRepository {
     await _conv(uid).doc(sessionId).delete();
   }
 
+  Future<void> saveFeedback({
+    required String convId,
+    required String rating,
+    required int messageCount,
+  }) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      await _conv(uid).doc(convId).update({
+        'feedback': rating,
+        'feedbackAt': FieldValue.serverTimestamp(),
+        'feedbackMessageCount': messageCount,
+      });
+    } catch (_) {}
+  }
+
   Future<void> clearAll() async {
     final uid = _uid;
     if (uid == null) return;

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
+import '../../data/chat_repository.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/religion_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -36,6 +37,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   StreamSubscription<Amplitude>? _ampSub;
   Timer? _silenceTimer;
   DateTime? _lastSoundTime;
+  bool _feedbackGiven = false;
 
   @override
   void initState() {
@@ -50,6 +52,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ref.read(chatProvider.notifier).sendMessage(pending);
       Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     }
+  }
+
+  bool _shouldShowFeedback(List<ChatMessage> messages, ChatState chatState) {
+    if (chatState.isTyping || chatState.isStreaming) return false;
+    final aiCount = messages.where((m) => !m.isUser).length;
+    return aiCount >= 3;
   }
 
   @override
@@ -336,6 +344,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               line: line,
               onDismiss: () =>
                   ref.read(chatProvider.notifier).clearPendingVerse(),
+            ),
+          if (!_feedbackGiven && _shouldShowFeedback(messages, chatState))
+            _FeedbackBanner(
+              accent: accent,
+              fg: fg,
+              muted: muted,
+              line: line,
+              onRate: (rating) {
+                setState(() => _feedbackGiven = true);
+                final convId = chatState.session?.id;
+                if (convId != null) {
+                  ChatRepository.instance.saveFeedback(
+                    convId: convId,
+                    rating: rating,
+                    messageCount: messages.length,
+                  );
+                }
+              },
             ),
           _InputBar(
             controller: _controller,
@@ -1483,6 +1509,107 @@ class _VerseBanner extends StatelessWidget {
             child: Icon(Icons.close_rounded, size: 15, color: muted),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Feedback Banner ──────────────────────────────────────────────────────────
+
+class _FeedbackBanner extends StatefulWidget {
+  const _FeedbackBanner({
+    required this.accent,
+    required this.fg,
+    required this.muted,
+    required this.line,
+    required this.onRate,
+  });
+
+  final Color accent;
+  final Color fg;
+  final Color muted;
+  final Color line;
+  final void Function(String rating) onRate;
+
+  @override
+  State<_FeedbackBanner> createState() => _FeedbackBannerState();
+}
+
+class _FeedbackBannerState extends State<_FeedbackBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _slide = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _rate(String rating) {
+    _ctrl.reverse().then((_) => widget.onRate(rating));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _slide,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: widget.line, width: 0.5)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Helping so far?',
+                style: GoogleFonts.inter(fontSize: 13, color: widget.muted),
+              ),
+            ),
+            _RateButton(label: '👍', onTap: () => _rate('up'), accent: widget.accent),
+            const SizedBox(width: 8),
+            _RateButton(label: '👎', onTap: () => _rate('down'), accent: widget.accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RateButton extends StatelessWidget {
+  const _RateButton({
+    required this.label,
+    required this.onTap,
+    required this.accent,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: accent.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 16)),
       ),
     );
   }
