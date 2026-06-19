@@ -25,10 +25,12 @@ export const sendReadingReminders = onSchedule(
     const now = new Date();
     const currentHour = now.getUTCHours();
     const currentMinute = now.getUTCMinutes();
-
-    const sends: Array<{ token: string; title: string; body: string }> = [];
+    // YYYY-MM-DD in UTC — used to gate one notification per plan per day.
+    const today = now.toISOString().slice(0, 10);
 
     const usersSnap = await db.collection('users').get();
+
+    let sentCount = 0;
 
     await Promise.all(
       usersSnap.docs.map(async (userDoc) => {
@@ -43,53 +45,52 @@ export const sendReadingReminders = onSchedule(
           .where('reminderEnabled', '==', true)
           .get();
 
-        for (const planDoc of plansSnap.docs) {
-          const plan = planDoc.data();
+        await Promise.all(
+          plansSnap.docs.map(async (planDoc) => {
+            const plan = planDoc.data();
 
-          // Match hour; allow ±5 minute window to absorb scheduling drift.
-          if (plan.reminderHour !== currentHour) continue;
-          if (Math.abs((plan.reminderMinute ?? 0) - currentMinute) > 5) continue;
+            // Match hour; allow ±5 minute window to absorb scheduling drift.
+            if (plan.reminderHour !== currentHour) return;
+            if (Math.abs((plan.reminderMinute ?? 0) - currentMinute) > 5) return;
 
-          const dayNum: number = plan.dayNumber ?? 1;
-          const duration: number | null = plan.durationDays ?? null;
-          const units: number = plan.unitsPerDay ?? 1;
-          const label: string = plan.unitLabel ?? 'page';
-          const mins: number = plan.estimatedMinutesPerDay ?? 5;
+            // Hard guard: skip if this plan already fired a notification today.
+            if (plan.lastNotifiedDate === today) return;
 
-          const bodyDay = duration != null
-            ? `Day ${dayNum} of ${duration}`
-            : `Day ${dayNum}`;
+            const dayNum: number = plan.dayNumber ?? 1;
+            const duration: number | null = plan.durationDays ?? null;
+            const units: number = plan.unitsPerDay ?? 1;
+            const label: string = plan.unitLabel ?? 'page';
+            const mins: number = plan.estimatedMinutesPerDay ?? 5;
 
-          sends.push({
-            token: fcmToken,
-            title: `A few minutes with ${plan.textTitle ?? 'your reading'}?`,
-            body: `${bodyDay} · ${units} ${label}, ~${mins} min`,
-          });
-        }
+            const bodyDay = duration != null
+              ? `Day ${dayNum} of ${duration}`
+              : `Day ${dayNum}`;
+
+            try {
+              await messaging.send({
+                token: fcmToken,
+                notification: {
+                  title: `A few minutes with ${plan.textTitle ?? 'your reading'}?`,
+                  body: `${bodyDay} · ${units} ${label}, ~${mins} min`,
+                },
+                android: { priority: 'high' },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+              });
+
+              // Mark this plan as notified today so re-runs don't double-fire.
+              await planDoc.ref.update({ lastNotifiedDate: today });
+              sentCount++;
+            } catch (err) {
+              // Log but don't throw — one bad token shouldn't block others.
+              console.warn(
+                `FCM send failed for token ...${fcmToken.slice(-6)}: ${err}`
+              );
+            }
+          })
+        );
       })
     );
 
-    if (sends.length === 0) return;
-
-    // Send individually so each user gets their own personalised message.
-    await Promise.all(
-      sends.map((s) =>
-        messaging
-          .send({
-            token: s.token,
-            notification: { title: s.title, body: s.body },
-            android: { priority: 'high' },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          })
-          .catch((err) => {
-            // Log but don't throw — one bad token shouldn't block others.
-            console.warn(
-              `FCM send failed for token ...${s.token.slice(-6)}: ${err}`
-            );
-          })
-      )
-    );
-
-    console.log(`sendReadingReminders: sent ${sends.length} notification(s).`);
+    console.log(`sendReadingReminders: sent ${sentCount} notification(s).`);
   }
 );
