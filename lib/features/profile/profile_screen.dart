@@ -304,6 +304,22 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    _SectionLabel(label: 'HELP', muted: muted),
+                    const SizedBox(height: 10),
+                    _SurfaceCard(
+                      surface: surface,
+                      line: line,
+                      isDark: isDark,
+                      child: _ActionRow(
+                        icon: Icons.auto_stories_rounded,
+                        label: 'Feature Guide',
+                        fg: fg,
+                        muted: muted,
+                        line: line,
+                        onTap: () => context.push('/guide'),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     _SectionLabel(label: 'DEVELOPER', muted: muted),
                     const SizedBox(height: 10),
                     _SurfaceCard(
