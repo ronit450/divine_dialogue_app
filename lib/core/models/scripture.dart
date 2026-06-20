@@ -8,6 +8,8 @@ class ScriptureVerse {
   final String? wordMeanings;
   final bool isGroupStart;
   final String? groupLabel;
+  final int sectionHeader;
+  final int paragraph;
 
   const ScriptureVerse({
     required this.number,
@@ -17,6 +19,8 @@ class ScriptureVerse {
     this.wordMeanings,
     this.isGroupStart = false,
     this.groupLabel,
+    this.sectionHeader = 0,
+    this.paragraph = 0,
   });
 }
 

@@ -954,7 +954,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     bool flushNext = false;
 
     for (final v in verses) {
-      final isSectionTitle = v.original?.trimLeft().startsWith('॥') ?? false;
+      final isSectionTitle = v.sectionHeader != 0;
       final isPauriEnd = RegExp(r'॥[੦-੯]+॥\s*$').hasMatch(v.original ?? '');
 
       if (current.isNotEmpty && (flushNext || v.isGroupStart || isSectionTitle)) {
@@ -979,7 +979,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         if (verses.isEmpty) return const SizedBox.shrink();
 
         final first = verses.first;
-        final isSectionTitle = first.original?.trimLeft().startsWith('॥') ?? false;
+        final isSectionTitle = first.sectionHeader != 0;
 
         if (isSectionTitle) {
           return Padding(
@@ -1231,9 +1231,8 @@ class _VerseCard extends ConsumerWidget {
   }
 
   Widget _sikhCard() {
-    // For non-GGS: section title = original Gurmukhi text that opens with ॥ (e.g. ॥ ਜਪੁ ॥)
-    final isSectionTitle = type != ScriptureTextType.ggs &&
-        (verse.original?.trimLeft().startsWith('॥') ?? false);
+    // For non-GGS: section title = verse marked as heading by BaniDB (sectionHeader != 0).
+    final isSectionTitle = type != ScriptureTextType.ggs && verse.sectionHeader != 0;
 
     // Pauri-end verse: Gurmukhi ends with ॥<Gurmukhi numeral(s)>॥ e.g. ॥੧॥
     final isPauriEnd = type != ScriptureTextType.ggs &&

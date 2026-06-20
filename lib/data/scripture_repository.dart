@@ -41,6 +41,8 @@ class ScriptureRepository {
         original: v['g'] as String?,
         transliteration: (v['t'] as String?)?.isNotEmpty == true ? v['t'] as String : null,
         translation: v['e'] as String? ?? '',
+        sectionHeader: (v['h'] as int?) ?? 0,
+        paragraph: (v['p'] as int?) ?? 0,
         isGroupStart: v.containsKey('h'),
         groupLabel: v['h']?.toString(),
       ));
