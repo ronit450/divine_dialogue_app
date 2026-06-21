@@ -42,8 +42,7 @@ class DivineApi {
   DivineApi._();
   static final DivineApi instance = DivineApi._();
 
-  // TODO(backend): switch to https once your backend buddy enables TLS on the ALB
-  static const _baseUrl = 'http://divince-chat-ai-alb-1631994646.us-east-1.elb.amazonaws.com';
+  static const _baseUrl = String.fromEnvironment('BASE_URL');
 
   http.Client _client = http.Client();
 
