@@ -52,6 +52,7 @@ dependencies:
   firebase_crashlytics: ^4.3.5
   firebase_app_check: ^0.3.2+2
   firebase_messaging: ^15.2.5   # FCM — wired in by NOTIFICATIONS.md guide
+  firebase_analytics: ^11.4.0
   record: 5.1.2
   permission_handler: ^11.3.1
   path: ^1.9.0

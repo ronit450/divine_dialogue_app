@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' show sin, pi;
 import 'package:flutter/material.dart';
+import '../../services/analytics_service.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,6 +44,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.instance.enterFeature('chat');
     WidgetsBinding.instance.addPostFrameCallback((_) => _consumePending());
   }
 
@@ -63,6 +65,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    AnalyticsService.instance.exitFeature('chat');
     _controller.dispose();
     _scrollCtrl.dispose();
     _ampSub?.cancel();

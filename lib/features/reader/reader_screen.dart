@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../services/analytics_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,6 +62,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.instance.enterFeature('reader_${widget.textId}');
     _browseMode = widget.hidePlanBanner;
     _loadPrefs();
     _meta = ScriptureTextMeta.forTextId(widget.textId);
@@ -102,6 +104,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    AnalyticsService.instance.exitFeature('reader_${widget.textId}');
     final plan = ref.read(readingPlanProvider).planForText(widget.textId);
     if (plan != null && !_loading && !_browseMode) {
       ref.read(readingPlanProvider.notifier).updateLastRead(plan.id, _currentChapter);

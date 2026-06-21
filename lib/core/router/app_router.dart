@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/analytics_service.dart';
 import '../../providers/religion_provider.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_intro_screen.dart';
@@ -37,6 +38,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/splash',
+    observers: [AnalyticsService.instance.observer],
     redirect: (context, state) {
       if (!isLoaded) return null;
       final loc = state.matchedLocation;
